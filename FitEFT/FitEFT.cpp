@@ -498,13 +498,20 @@ void FitEFT( const char * outputFileName,
 
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
     {
-        const ModelCompare::Observable &    obs      = observables[obsIndex];
-        const TH1D &                        target   = *targetData[obsIndex];
-        const TH1D &                        source   = *sourceData[obsIndex];
-        const ConstTH1DVector               srcCoefs = ToConstTH1DVector(sourceCoefs[obsIndex]);
+        const ModelCompare::Observable &    obs         = observables[obsIndex];
+        const TH1D *                        pFitTarget  = targetData[obsIndex];
+        const TH1D &                        source      = *sourceData[obsIndex];
+        const ConstTH1DVector               srcCoefs    = ToConstTH1DVector(sourceCoefs[obsIndex]);
 
+        ModelCompare::GoodBadHists goodBad;
 
         WriteLog( fpLog, "\n******************** %hs ********************", FMT_HS(obs.name) );
+
+        if (pFitTarget->InheritsFrom(TProfile::Class()))
+        {
+            goodBad = ModelCompare::HistSplitGoodBadBins( pFitTarget, rawTargetData[obsIndex] );
+            pFitTarget = goodBad.good.get();
+        }
 
         for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
         {
@@ -513,7 +520,7 @@ void FitEFT( const char * outputFileName,
                                 FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
             LogMsgInfo( "------------------------------------------------------------" );
 
-            FitResult fitResult = FitEFTObs( obs, coefNames, target, fitParam,
+            FitResult fitResult = FitEFTObs( obs, coefNames, *pFitTarget, fitParam,
                                              source, srcCoefs, sourceEval,
                                              fitIndex );
 
@@ -521,7 +528,7 @@ void FitEFT( const char * outputFileName,
                 ++fitFail;
 
             // cross-check
-            CrossCheckFitResult( coefNames, fitResult, fitParam, target,
+            CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
                                  source, srcCoefs, sourceEval );
         }
 
@@ -530,7 +537,7 @@ void FitEFT( const char * outputFileName,
                             FMT_HS(obs.name) );
         LogMsgInfo( "------------------------------------------------------------") ;
 
-        FitResult fitResult = FitEFTObs( obs, coefNames, target, fitParam,
+        FitResult fitResult = FitEFTObs( obs, coefNames, *pFitTarget, fitParam,
                                          source, srcCoefs, sourceEval,
                                          -1 );
 
@@ -538,7 +545,7 @@ void FitEFT( const char * outputFileName,
             ++fitFail;
 
         // cross-check
-        CrossCheckFitResult( coefNames, fitResult, fitParam, target,
+        CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
                              source, srcCoefs, sourceEval );
 
         // TODO: make figures from fit result
