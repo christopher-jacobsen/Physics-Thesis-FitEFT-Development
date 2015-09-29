@@ -206,82 +206,30 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
     // fill in result
 
     FitResult result;
-
-    result.chi2     = fitFunc.GetChisquare();
-    result.ndf      = fitFunc.GetNDF();
-    result.prob     = fitFunc.GetProb();
-    result.chi2_ndf = (result.ndf > 0 ? result.chi2 / result.ndf : 0);
-
-    for (Int_t i = 0; i < npar; ++i)
     {
-        if ((fitIndex >= 0) && (i != fitIndex))
-            continue;
+        result.chi2     = fitFunc.GetChisquare();
+        result.ndf      = fitFunc.GetNDF();
+        result.prob     = fitFunc.GetProb();
+        result.chi2_ndf = (result.ndf > 0 ? result.chi2 / result.ndf : 0);
 
-        FitResult::Param resultParam;
+        for (Int_t i = 0; i < npar; ++i)
+        {
+            if ((fitIndex >= 0) && (i != fitIndex))
+                continue;
 
-        resultParam.name  = fitParam[i].name;
-        resultParam.value = fitFunc.GetParameter(i) * scale;
-        resultParam.error = fitFunc.GetParError(i)  * scale;
+            FitResult::Param resultParam;
 
-        result.param.push_back(resultParam);
+            resultParam.name  = fitParam[i].name;
+            resultParam.value = fitFunc.GetParameter(i) * scale;
+            resultParam.error = fitFunc.GetParError(i)  * scale;
+
+            result.param.push_back(resultParam);
+        }
     }
 
     LogMsgInfo( "" );  // empty line
 
     return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-void LogMsgHistBinCounts( const TH1D & hist )
-{
-    Int_t nBins1     = hist.GetNbinsX();
-    Int_t nBins2     = hist.GetSize();
-    Int_t nNonEmpty1 = (Int_t)HistNonEmptyBinCount(hist, false);
-    Int_t nNonEmpty2 = (Int_t)HistNonEmptyBinCount(hist, true );
-
-    LogMsgInfo( "%hs: %i(%i) bins - %i(%i) non-empty  %i(%i) empty", FMT_HS(hist.GetName()),
-                FMT_I(nBins1), FMT_I(nBins2), FMT_I(nNonEmpty1), FMT_I(nNonEmpty2),
-                FMT_I(nBins1 - nNonEmpty1), FMT_I(nBins2 - nNonEmpty2) );
-}
-
-////////////////////////////////////////////////////////////////////////////////
-void LogMsgHistBinCounts( const ConstTH1DVector & hists )
-{
-    for (const TH1D * pHist : hists)
-    {
-        if (pHist)
-            LogMsgHistBinCounts(*pHist);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-void LogMsgHistBinCounts( const TH1D & hist1, const TH1D & hist2 )
-{
-    Int_t nBins1     = hist1.GetNbinsX();
-    Int_t nBins2     = hist1.GetSize();
-    Int_t nNonEmpty1 = (Int_t)HistNonEmptyBinCount( hist1, hist2, false, false );
-    Int_t nNonEmpty2 = (Int_t)HistNonEmptyBinCount( hist1, hist2, false, true  );
-
-    LogMsgInfo( "%hs & %hs: %i(%i) bins - %i(%i) non-empty  %i(%i) empty",
-                FMT_HS(hist1.GetName()), FMT_HS(hist2.GetName()),
-                FMT_I(nBins1), FMT_I(nBins2), FMT_I(nNonEmpty1), FMT_I(nNonEmpty2),
-                FMT_I(nBins1 - nNonEmpty1), FMT_I(nBins2 - nNonEmpty2) );
-}
-
-////////////////////////////////////////////////////////////////////////////////
-void LogMsgHistBinCounts( const ConstTH1DVector & hists1, const ConstTH1DVector & hists2 )
-{
-    auto       itr1 = hists1.cbegin();
-    const auto end1 = hists1.cend();
-
-    auto       itr2 = hists2.cbegin();
-    const auto end2 = hists2.cend();
-
-    for ( ; (itr1 != end1) && (itr2 != end2); ++itr1, ++itr2)
-    {
-        if (*itr1 && *itr2)
-            LogMsgHistBinCounts( **itr1, **itr2 );
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -299,12 +247,12 @@ void WriteLog( FILE * fpLog, const char * format, ... )
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void WriteFitResult( FILE * fpLog, const FitResult & result )
+bool WriteFitResult( FILE * fpLog, const FitResult & result )
 {
     if (result.status != 0)
     {
         WriteLog( fpLog, "!!! Fit Failed: status = %i", FMT_I(result.status) );
-        return;
+        return false;
     }
 
     WriteLog( fpLog, "------------------------------------------------------------" );
@@ -318,6 +266,8 @@ void WriteFitResult( FILE * fpLog, const FitResult & result )
     }
 
     WriteLog( fpLog, "------------------------------------------------------------" );
+
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -411,6 +361,8 @@ void FitEFT( const char * outputFileName,
 
     // fit each source hist to the target, varying only one parameter
 
+    size_t fitFail = 0;
+
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
     {
         WriteLog( fpLog, "\n******************** %hs ********************", FMT_HS(observables[obsIndex].name) );
@@ -428,7 +380,8 @@ void FitEFT( const char * outputFileName,
                            *sourceData[obsIndex], ToConstTH1DVector(sourceCoefs[obsIndex]), sourceEval,
                            fitIndex );
 
-            WriteFitResult( fpLog, fitResult );
+            if (!WriteFitResult( fpLog, fitResult ))
+                ++fitFail;
         }
 
         WriteLog( fpLog, "\n------------------------------------------------------------" );
@@ -442,10 +395,14 @@ void FitEFT( const char * outputFileName,
                        *sourceData[obsIndex], ToConstTH1DVector(sourceCoefs[obsIndex]), sourceEval,
                        -1 );
 
-        WriteFitResult( fpLog, fitResult );
+        if (!WriteFitResult( fpLog, fitResult ))
+            ++fitFail;
 
         // TODO: make figures from fit result
     }
+
+    if (fitFail)
+        WriteLog( fpLog, "\n!!! Error: %u fit(s) failed !!!", FMT_U(fitFail) );
 
     fclose(fpLog);
 }
