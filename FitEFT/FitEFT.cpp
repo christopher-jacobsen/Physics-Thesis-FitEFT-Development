@@ -47,7 +47,7 @@ struct FitResult
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStringVector & coefNames,
+FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
                      const TH1D & target, const FitParamVector & fitParam,
                      const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
                      int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
@@ -70,7 +70,8 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
 //     ocW = -1.225537852E-06 ± 1.840232309E+xx
 //     ocB = -8.837058852E-05 ± 6.133336659E+xx
 
-    const Double_t  scale = 1;      // errors =    E-13,    E-7,    E-5 /    E-14    E-15    E-13 (error)
+  // PTZ:
+  //const Double_t  scale = 1;      // errors =    E-13,    E-7,    E-5 /    E-14    E-15    E-13 (error)
   //const Double_t  scale = 1E-3;   // errors = 1.5E-10, 3.1E-7, 1.5E-5 / 4.9E-4  1.5E-4  5.1E-2  (warn)
   //const Double_t  scale = 1E-6;   // errors = 1.5E-7,  3.1E-7, 1.5E-5 / 1.6E-5  5.1E-6  1.7E-3  (warn)
   //const Double_t  scale = 1E-9;   // errors = 1.5E-4,  3.1E-7, 1.5E-5 / 5.9E-3  1.8E-3  6.1E-1
@@ -78,6 +79,17 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
   //const Double_t  scale = 1E-11;  // errors =    E-2,     E-7,    E-5 /    E-1     E-1     E+1
   //const Double_t  scale = 1E-12;  // errors = 1.5E-1,  3.1E-7, 1.5E-5 / 5.9E+0  1.8E+0  6.1E+2
   //const Double_t  scale = 1E-16;  // errors =    E-3,     E-7,    E-5 /    E+4     E+4     E+6
+
+  // O1(cWWW)
+//   ocWWW =  6.273085662E-09 ± 2.436393358E-17
+//     ocW =  6.982349016E-07 ± 4.581396056E-17
+//     ocB = -9.385725459E-06 ± 3.284975815E-15
+//
+//   ocWWW = -3.252253448E-10 ± 2.755932386E-17
+//     ocW =  6.960137960E-07 ± 4.635048099E-17
+//     ocB = -1.194507236E-06 ± 3.736071058E-15
+    const Double_t  scale = 1;      // errors = 2.4E-17,  4.6E-17, 3.3E-17 / 4.9E-18  4.6E-17  3.7E-15
+  //const Double_t  scale = 1E-6;   // errors = 2.4E-17,  4.6E-17, (Fail)  / 2.8E-17  4.6E-17  3.8E-15
 
     const Double_t  xmin  = target.GetXaxis()->GetXmin();
     const Double_t  xmax  = target.GetXaxis()->GetXmax();
@@ -128,6 +140,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
         // reduce NDF
         if (nEff <= 0)
         {
+            // LogMsgInfo( ">>>> Rejecting bin %i <<<<", bin );
             ++rejectCount;
             TF1::RejectPoint();
             return 0;
@@ -147,6 +160,9 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
         fitFunc.SetParName(   i, fitParam[i].name );
         fitFunc.SetParameter( i, fitParam[i].initValue / scale );
         fitFunc.SetParLimits( i, fitParam[i].minValue / scale, fitParam[i].maxValue / scale );
+	
+        // set initial step (helps fit converge)
+        fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 1E6 / scale );
 
         if ((fitIndex >= 0) && (i != fitIndex))
             fitFunc.FixParameter( i, fitParam[i].initValue / scale );
@@ -154,11 +170,17 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
 
     TH1DUniquePtr pFitHist{ (TH1D *)target.Clone() };     // clone hist as Fit is not const
 
-    std::string fitOption1 = "M N Q";
-    std::string fitOption2 = "M N S";
+    // setup fit options
+    // do not use M - it produces too many warnings of:
+    // "FUNCTION VALUE DOES NOT SEEM TO DEPEND ON ANY OF THE 1 VARIABLE PARAMETERS. VERIFY THAT STEP SIZES ARE BIG ENOUGH AND CHECK FCN LOGIC."
+
+    std::string fitOption1 = "N Q";
+    std::string fitOption2 = "N S";
 
     // use log-likelihood for TH1D but not TProfile
-    if (!pFitHist->InheritsFrom(TProfile::Class()))
+    // Note: do not use "WL" as it does something weird
+
+    if (!target.InheritsFrom(TProfile::Class()))
     {
         fitOption1 += " L";
         fitOption2 += " L";
@@ -176,6 +198,8 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
             return FitResult( (int)fitStatus );
     }
+
+    //LogMsgInfo( "-*-*-*-*-*-" );
 
     //
     // second fit with no limits
@@ -227,9 +251,118 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const RootUtil::CStri
         }
     }
 
+    // cross-check chi2
+    {
+        Double_t chi2 = target.Chisquare( &fitFunc );
+
+        LogMsgInfo( "Cross-check chi2: %g", FMT_F(chi2) );
+    }
+
+    LogMsgHistBinCounts( target );
+
     LogMsgInfo( "" );  // empty line
 
     return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+TH1D * CreateReweightFitResult( const CStringVector & coefNames,
+                                const FitResult & fitResult, const FitParamVector & fitParam,
+                                const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
+{
+    // construct target parameter values
+    ReweightEFT::ParamVector targetParam;
+    {
+        for (const auto & p : fitParam)
+        {
+            ReweightEFT::Parameter t;
+            t.name  = p.name;
+            t.value = p.initValue;
+            targetParam.push_back(t);
+        }
+
+        for (const auto & p : fitResult.param)
+        {
+            auto itr = std::find_if( targetParam.begin(), targetParam.end(), [&p](const ReweightEFT::Parameter & x) { return strcmp(x.name, p.name) == 0; } );
+            if (itr == targetParam.end())
+                ThrowError( "Cannot find fit result parameter " + std::string(p.name) );
+            itr->value = p.value;
+        }
+
+        for (const auto & t : targetParam)
+        {
+            LogMsgInfo( "> %hs = %g", FMT_HS(t.name), FMT_F(t.value) );
+        }
+    }
+
+    // construct target evaluation
+    std::vector<double> targetEval;
+    CalcEvalVector( coefNames, targetParam, targetEval );
+
+    TH1D * pHist = ReweightEFT::ReweightHist( source, sourceCoefs, sourceEval, targetEval, "RWFitHist", "RWFitHist" );
+
+    return pHist;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void CrossCheckFitResult( const CStringVector & coefNames,
+                          const FitResult & fitResult, const FitParamVector & fitParam,
+                          const TH1D & target,
+                          const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
+{
+    if (fitResult.status != 0)
+        return;
+
+    LogMsgInfo( "" );
+
+    TH1DUniquePtr upFitHist
+    {
+        CreateReweightFitResult( coefNames, fitResult, fitParam,
+                                 source, sourceCoefs, sourceEval )
+    };
+
+    upFitHist.reset( ConvertTProfileToTH1D( upFitHist.get(), false ) );
+
+    // zero errors on reweightHist (make perfect)
+    {
+        const Int_t nSize = upFitHist->GetSize();
+        for (Int_t bin = 0; bin < nSize; ++bin)
+        {
+            upFitHist->SetBinError(bin, 0.0);
+        }
+        upFitHist->ResetStats();
+        //LogMsgHistDump(*upFitHist);
+    }
+
+    TH1DUniquePtr upChiHist{ (TH1D *)target.Clone("ChiHist") };
+
+    // zero bins that have zero error in chi hist
+    {
+        const Int_t nSize = upChiHist->GetSize();
+        for (Int_t bin = 0; bin < nSize; ++bin)
+        {
+            Double_t error = upChiHist->GetBinError(bin);
+            if (error == 0)
+            {
+                ZeroHistBin( *upChiHist, bin );
+                ZeroHistBin( *upFitHist, bin );
+            }
+        }
+        upChiHist->ResetStats();
+    }
+
+    LogMsgHistEffectiveEntries( *upChiHist );
+    LogMsgHistEffectiveEntries( *upFitHist );
+
+    LogMsgHistBinCounts( *upChiHist );
+    LogMsgHistBinCounts( *upFitHist );
+
+    LogMsgInfo( "" );
+
+    RootUtil::Chi2Result chi2;
+    chi2.Chi2Test( *upChiHist, *upFitHist );
+
+    LogMsgInfo( chi2.Label().c_str() );
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -273,7 +406,7 @@ bool WriteFitResult( FILE * fpLog, const FitResult & result )
 ////////////////////////////////////////////////////////////////////////////////
 void FitEFT( const char * outputFileName,
              const ModelCompare::ObservableVector & observables,
-             const RootUtil::CStringVector & coefNames,
+             const CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
              const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam )
 {
@@ -365,38 +498,48 @@ void FitEFT( const char * outputFileName,
 
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
     {
-        WriteLog( fpLog, "\n******************** %hs ********************", FMT_HS(observables[obsIndex].name) );
+        const ModelCompare::Observable &    obs      = observables[obsIndex];
+        const TH1D &                        target   = *targetData[obsIndex];
+        const TH1D &                        source   = *sourceData[obsIndex];
+        const ConstTH1DVector               srcCoefs = ToConstTH1DVector(sourceCoefs[obsIndex]);
+
+
+        WriteLog( fpLog, "\n******************** %hs ********************", FMT_HS(obs.name) );
 
         for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
         {
             WriteLog( fpLog, "\n------------------------------------------------------------" );
             WriteLog( fpLog, "Fitting %hs to parameter %hs",
-                                FMT_HS(observables[obsIndex].name), FMT_HS(fitParam[fitIndex].name) );
+                                FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
             LogMsgInfo( "------------------------------------------------------------" );
 
-            FitResult fitResult =
-                FitEFTObs( observables[obsIndex], coefNames,
-                           *targetData[obsIndex], fitParam,
-                           *sourceData[obsIndex], ToConstTH1DVector(sourceCoefs[obsIndex]), sourceEval,
-                           fitIndex );
+            FitResult fitResult = FitEFTObs( obs, coefNames, target, fitParam,
+                                             source, srcCoefs, sourceEval,
+                                             fitIndex );
 
             if (!WriteFitResult( fpLog, fitResult ))
                 ++fitFail;
+
+            // cross-check
+            CrossCheckFitResult( coefNames, fitResult, fitParam, target,
+                                 source, srcCoefs, sourceEval );
         }
 
         WriteLog( fpLog, "\n------------------------------------------------------------" );
         WriteLog( fpLog, "Fitting %hs to all parameters",
-                            FMT_HS(observables[obsIndex].name) );
+                            FMT_HS(obs.name) );
         LogMsgInfo( "------------------------------------------------------------") ;
 
-        FitResult fitResult =
-            FitEFTObs( observables[obsIndex], coefNames,
-                       *targetData[obsIndex], fitParam,
-                       *sourceData[obsIndex], ToConstTH1DVector(sourceCoefs[obsIndex]), sourceEval,
-                       -1 );
+        FitResult fitResult = FitEFTObs( obs, coefNames, target, fitParam,
+                                         source, srcCoefs, sourceEval,
+                                         -1 );
 
         if (!WriteFitResult( fpLog, fitResult ))
             ++fitFail;
+
+        // cross-check
+        CrossCheckFitResult( coefNames, fitResult, fitParam, target,
+                             source, srcCoefs, sourceEval );
 
         // TODO: make figures from fit result
     }
