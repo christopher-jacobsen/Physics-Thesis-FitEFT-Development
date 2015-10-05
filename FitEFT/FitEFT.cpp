@@ -266,9 +266,9 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TH1D * CreateReweightFitResult( const CStringVector & coefNames,
-                                const FitResult & fitResult, const FitParamVector & fitParam,
-                                const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
+static TH1D * CreateReweightFitResult( const CStringVector & coefNames,
+                                       const FitResult & fitResult, const FitParamVector & fitParam,
+                                       const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
 {
     // construct target parameter values
     ReweightEFT::ParamVector targetParam;
@@ -305,10 +305,10 @@ TH1D * CreateReweightFitResult( const CStringVector & coefNames,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void CrossCheckFitResult( const CStringVector & coefNames,
-                          const FitResult & fitResult, const FitParamVector & fitParam,
-                          const TH1D & target,
-                          const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
+static void CrossCheckFitResult( const CStringVector & coefNames,
+                                 const FitResult & fitResult, const FitParamVector & fitParam,
+                                 const TH1D & target,
+                                 const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
 {
     if (fitResult.status != 0)
         return;
@@ -321,52 +321,27 @@ void CrossCheckFitResult( const CStringVector & coefNames,
                                  source, sourceCoefs, sourceEval )
     };
 
-    upFitHist.reset( ConvertTProfileToTH1D( upFitHist.get(), false ) );
-
-    // zero errors on reweightHist (make perfect)
-    {
-        const Int_t nSize = upFitHist->GetSize();
-        for (Int_t bin = 0; bin < nSize; ++bin)
-        {
-            upFitHist->SetBinError(bin, 0.0);
-        }
-        upFitHist->ResetStats();
-        //LogMsgHistDump(*upFitHist);
-    }
-
-    TH1DUniquePtr upChiHist{ (TH1D *)target.Clone("ChiHist") };
-
-    // zero bins that have zero error in chi hist
-    {
-        const Int_t nSize = upChiHist->GetSize();
-        for (Int_t bin = 0; bin < nSize; ++bin)
-        {
-            Double_t error = upChiHist->GetBinError(bin);
-            if (error == 0)
-            {
-                ZeroHistBin( *upChiHist, bin );
-                ZeroHistBin( *upFitHist, bin );
-            }
-        }
-        upChiHist->ResetStats();
-    }
-
-    LogMsgHistEffectiveEntries( *upChiHist );
+    LogMsgHistEffectiveEntries( target );
     LogMsgHistEffectiveEntries( *upFitHist );
 
-    LogMsgHistBinCounts( *upChiHist );
+    LogMsgHistBinCounts( target );
     LogMsgHistBinCounts( *upFitHist );
 
     LogMsgInfo( "" );
 
+    // perform chi2 test
+    // note: this test includes the errors from both histograms and thus will not match
+    // the chi2 result from the fit, which only uses the target errors.
+    // This chi2 value should be lower than the fit chi2.
+    
     RootUtil::Chi2Result chi2;
-    chi2.Chi2Test( *upChiHist, *upFitHist );
+    chi2.Chi2Test( target, *upFitHist );  // supports both TH1D and TProfile
 
     LogMsgInfo( chi2.Label().c_str() );
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void WriteLog( FILE * fpLog, const char * format, ... )
+static void WriteLog( FILE * fpLog, const char * format, ... )
 {
     std::va_list args;
 
@@ -380,7 +355,7 @@ void WriteLog( FILE * fpLog, const char * format, ... )
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool WriteFitResult( FILE * fpLog, const FitResult & result )
+static bool WriteFitResult( FILE * fpLog, const FitResult & result )
 {
     if (result.status != 0)
     {
