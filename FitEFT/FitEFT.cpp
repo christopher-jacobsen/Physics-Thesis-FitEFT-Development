@@ -365,12 +365,14 @@ static bool WriteFitResult( FILE * fpLog, const FitResult & result )
 
     WriteLog( fpLog, "------------------------------------------------------------" );
 
-    WriteLog( fpLog, "chi2 / ndf = %g / %g = %g", FMT_F(result.chi2), FMT_F(result.ndf), FMT_F(result.chi2_ndf) );
+    WriteLog( fpLog, "chi2 / ndf = %g / %g = %g (%.2g)", FMT_F(result.chi2), FMT_F(result.ndf), FMT_F(result.chi2_ndf), FMT_F(result.chi2_ndf) );
     WriteLog( fpLog, "prob = %g\n", FMT_F(result.prob) );
 
     for (const FitResult::Param & p : result.param)
     {
-        WriteLog( fpLog, "%8hs = %.9E ± %.9E", FMT_HS(p.name), FMT_F(p.value), FMT_F(p.error) );
+        WriteLog( fpLog, "%8hs = %.9E ± %.9E (%.2g ± %.2g E-6)", FMT_HS(p.name),
+                  FMT_F(p.value), FMT_F(p.error),
+                  FMT_F(p.value*1E6), FMT_F(p.error*1E6) );
     }
 
     WriteLog( fpLog, "------------------------------------------------------------" );
@@ -472,6 +474,11 @@ void FitEFT( const char * outputFileName,
 
     // fit each source hist to the target, varying only one parameter
 
+    typedef std::pair<const char *, int>                        NameIndexPair;
+    typedef std::map< NameIndexPair, FitResult > FitResultMap;
+
+    FitResultMap results;
+
     size_t fitFail = 0;
 
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
@@ -508,6 +515,8 @@ void FitEFT( const char * outputFileName,
             // cross-check
             CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
                                  source, srcCoefs, sourceEval );
+
+            results[ NameIndexPair(obs.name,fitIndex) ] = fitResult;
         }
 
         WriteLog( fpLog, "\n------------------------------------------------------------" );
@@ -526,11 +535,63 @@ void FitEFT( const char * outputFileName,
         CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
                              source, srcCoefs, sourceEval );
 
+        results[ NameIndexPair(obs.name,-1) ] = fitResult;
+
         // TODO: make figures from fit result
+    }
+
+    WriteLog( fpLog, "\nSUMMARY" );
+
+    // Write summary
+    for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
+    {
+        const FitParam & fpar = fitParam[fitIndex];
+
+        WriteLog( fpLog, "\n---------- %hs ----------", FMT_HS(fpar.name) );
+
+        for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
+        {
+            const ModelCompare::Observable & obs = observables[obsIndex];
+
+            auto itrRes = results.find( NameIndexPair(obs.name,fitIndex) );
+            if (itrRes == results.end())
+                continue;
+
+            const FitResult & fitOne = itrRes->second;
+
+            itrRes = results.find( NameIndexPair(obs.name,-1) );
+            if (itrRes == results.end())
+                continue;
+
+            const FitResult & fitAll = itrRes->second;
+
+            auto itrPar = std::find_if( fitOne.param.cbegin(), fitOne.param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
+            if (itrPar == fitOne.param.cend())
+                continue;
+
+            const FitResult::Param & parOne = *itrPar;
+
+            itrPar = std::find_if( fitAll.param.cbegin(), fitAll.param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
+            if (itrPar == fitAll.param.cend())
+                continue;
+
+            const FitResult::Param & parAll = *itrPar;
+
+            WriteLog( fpLog, "%12hs: %6.2g | %6.2g | %6.2g || %6.2g | %6.2g | %6.2g ||"
+                             "       %.15E | %.15E | %.15E | %.15E",
+                        FMT_HS(obs.name),
+                        FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6), FMT_F(fitOne.chi2_ndf),
+                        FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6), FMT_F(fitAll.chi2_ndf),
+                        FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6),
+                        FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6)
+                    );
+        }
     }
 
     if (fitFail)
         WriteLog( fpLog, "\n!!! Error: %u fit(s) failed !!!", FMT_U(fitFail) );
+
+    WriteLog( fpLog, "" );
 
     fclose(fpLog);
 }
