@@ -36,7 +36,9 @@ void FitEFT( const char * outputFileName,
              const ModelCompare::ObservableVector & observables,
              const RootUtil::CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
-             const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam );
+             const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam,
+             double luminosity,
+             const char * cacheFileName );
 
 ////////////////////////////////////////////////////////////////////////////////
 

@@ -110,6 +110,8 @@ static const FitEFT::FitParamVector FitParams_EFT_SM =
     { "ocB",   0, -1E-2, 1E-2 },
 };
 
+static const double Luminosity = 10.0;
+
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(void)
@@ -117,8 +119,11 @@ int main(void)
   //FitEFT::FitEFT( "fit/SM_to_self_1E4",  Observables1, CoefNames_EFT_all, Models_1E4[0], FitParams_EFT_SM,  Models_1E4[0], Params_EFT_SM  );
   //FitEFT::FitEFT( "fit/EFT_to_self_1E4", Observables1, CoefNames_EFT_all, Models_1E4[1], FitParams_EFT_all, Models_1E4[1], Params_EFT_all );
 
-    FitEFT::FitEFT( "fit/EFT_to_SM_1E4", Observables1, CoefNames_EFT_all, Models_1E4[0], FitParams_EFT_SM, Models_1E4[1], Params_EFT_all );
-  //FitEFT::FitEFT( "fit/EFT_to_SM_1E6", Observables1, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all );
+//    FitEFT::FitEFT( "fit/EFT_to_SM_1E4", Observables1, CoefNames_EFT_all, Models_1E4[0], FitParams_EFT_SM, Models_1E4[1], Params_EFT_all,
+//                    Luminosity, "fit/Cache_1E4.root" );
+
+    FitEFT::FitEFT( "fit/EFT_to_SM_1E6", Observables1, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
+                    Luminosity, "fit/Cache_1E6.root" );
 
     LogMsgInfo( "\nDone." );
     return 0;

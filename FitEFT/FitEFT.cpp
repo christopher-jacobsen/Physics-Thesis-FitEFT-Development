@@ -383,7 +383,9 @@ void FitEFT( const char * outputFileName,
              const ModelCompare::ObservableVector & observables,
              const CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
-             const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam )
+             const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam,
+             double luminosity,
+             const char * cacheFileName )
 {
     // disable automatic histogram addition to current directory
     TH1::AddDirectory(kFALSE);
@@ -426,7 +428,8 @@ void FitEFT( const char * outputFileName,
 
     ReweightEFT::LoadReweightFiles( observables, coefNames, targetFile, sourceFile, sourceParam,    // inputs
                                     targetData, sourceData, sourceCoefs, sourceEval,                // outputs
-                                    rawTargetData, rawSourceData );
+                                    rawTargetData, rawSourceData,
+                                    luminosity, cacheFileName );                                    // optionals
 
     // write input hists
 
