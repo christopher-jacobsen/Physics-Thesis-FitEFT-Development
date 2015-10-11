@@ -223,6 +223,42 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             return FitResult( (int)fitStatus );
     }
 
+    /*
+    if (pFitHist->InheritsFrom(TProfile::Class()))
+    {
+        // TEST: What happens if I double the errors?
+        // Result: - doubles the error on cWWWW, cW, cB
+        //         - reduces chi2 error by 1/4
+
+        TProfile * pProf  = static_cast<TProfile *>(pFitHist.get());
+        Double_t * pSumw2 = pProf->GetSumw2()->GetArray();
+        if (pSumw2)
+        {
+            //LogMsgHistDump(*pProf);
+
+            const Int_t nSize = pProf->GetSize();
+            for (Int_t bin = 0; bin < nSize; ++bin)
+            {
+                if (bin == 55)
+                    bin = bin;
+
+                Double_t binContent = pProf->GetBinContent(bin);
+                Double_t binEntries = pProf->GetBinEntries(bin);
+                pSumw2[bin] = 4 * pSumw2[bin] - 3 * binEntries * binContent * binContent;
+            }
+
+            //LogMsgHistDump(*pProf);
+
+            fitStatus = pFitHist->Fit( &fitFunc, fitOption2.c_str() );
+            if ((int)fitStatus != 0)
+            {
+                if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))   // ignore improve (M) errors
+                    return FitResult( (int)fitStatus );
+            }
+        }
+    }
+    */
+
     fitStatus->Print();
 
     LogMsgInfo( "\nReject Count: %u", FMT_U(rejectCount) );
