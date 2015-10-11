@@ -14,8 +14,12 @@
 #include <TH1.h>
 #include <TProfile.h>
 #include <TF1.h>
+#include <TGraph.h>
+
 #include <TFitResult.h>
-#include <Math/MinimizerOptions.h>
+#include <TVirtualFitter.h>
+#include <TBackCompFitter.h>
+#include <Math/Minimizer.h>
 
 using namespace RootUtil;
 
@@ -31,6 +35,8 @@ struct FitResult
         const char *    name;
         double          value;
         double          error;
+
+        std::unique_ptr<TGraph> upMinScan;
     };
 
     typedef std::vector<Param> ParamVector;
@@ -180,7 +186,8 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // use log-likelihood for TH1D but not TProfile
     // Note: do not use "WL" as it does something weird
 
-    if (!target.InheritsFrom(TProfile::Class()))
+    bool bLogLike = !target.InheritsFrom(TProfile::Class());
+    if (bLogLike)
     {
         fitOption1 += " L";
         fitOption2 += " L";
@@ -272,6 +279,11 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
         result.prob     = fitFunc.GetProb();
         result.chi2_ndf = (result.ndf > 0 ? result.chi2 / result.ndf : 0);
 
+        // get last Fitter object used internally by last Fit call
+        TVirtualFitter  *       pFitter      = TVirtualFitter::GetFitter();
+        TBackCompFitter *       pBackFitter  = pFitter->InheritsFrom(TBackCompFitter::Class()) ? static_cast<TBackCompFitter *>(pFitter) : nullptr;
+        ROOT::Math::Minimizer * pMinimizer   = pBackFitter ? pBackFitter->GetMinimizer() : nullptr;
+
         for (Int_t i = 0; i < npar; ++i)
         {
             if ((fitIndex >= 0) && (i != fitIndex))
@@ -283,7 +295,45 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             resultParam.value = fitFunc.GetParameter(i) * scale;
             resultParam.error = fitFunc.GetParError(i)  * scale;
 
-            result.param.push_back(resultParam);
+            // create a minimization scan
+            if (pMinimizer)
+            {
+                resultParam.upMinScan.reset( new TGraph( (Int_t)100 ) );
+                TGraph * pGraph = resultParam.upMinScan.get();  // alias
+
+                // do +/- 2x error scan (default range)
+                double scanMin = fitFunc.GetParameter(i) - 2 * fitFunc.GetParError(i);
+                double scanMax = fitFunc.GetParameter(i) + 2 * fitFunc.GetParError(i);
+
+                // scan symmetric around 0.0 point
+                scanMin = std::min( scanMin, -scanMax );
+                scanMax = std::max( scanMax, -scanMin );
+
+                unsigned int nStep = pGraph->GetN();
+                bool scanResult = pMinimizer->Scan( i, nStep, pGraph->GetX(), pGraph->GetY(), scanMin, scanMax );
+                if (!scanResult || (nStep == 0))
+                {
+                    // failed
+                    resultParam.upMinScan.reset();
+                    pGraph = nullptr;
+                }
+                else
+                {
+                    // success
+                    pGraph->Set( (Int_t)nStep );  // resize to actual steps
+
+                    std::string sName  = ((fitIndex < 0) ? "min_all_"  : "min_one_") + std::string(obs.name)  + "_" + std::string(fitParam[i].name);
+                    std::string sTitle = std::string(obs.title) + ": fit min. for " + std::string(fitParam[i].name) + ((fitIndex < 0) ? " (all)" : " (one)");
+
+                    pGraph->SetName(  sName .c_str() );
+                    pGraph->SetTitle( sTitle.c_str() );
+
+                    pGraph->GetXaxis()->SetTitle( fitParam[i].name );
+                    pGraph->GetYaxis()->SetTitle( bLogLike ? "Log likelihood" : "#chi^{2}" );
+                }
+            }
+
+            result.param.push_back( std::move(resultParam) );
         }
     }
 
@@ -377,6 +427,19 @@ static void CrossCheckFitResult( const CStringVector & coefNames,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+static void WriteGraph( TFile & file, const TGraph & graph )
+{
+    TDirectory * oldDir = gDirectory;
+    if (gDirectory != &file)
+        file.cd();
+
+    graph.Write( nullptr, TObject::kOverwrite );
+
+    if (gDirectory != oldDir)
+        oldDir->cd();
+}
+
+////////////////////////////////////////////////////////////////////////////////
 static void WriteLog( FILE * fpLog, const char * format, ... )
 {
     std::va_list args;
@@ -391,7 +454,7 @@ static void WriteLog( FILE * fpLog, const char * format, ... )
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static bool WriteFitResult( FILE * fpLog, const FitResult & result )
+static bool WriteFitResult( FILE * fpLog, const FitResult & result, TFile * pFigureFile = nullptr )
 {
     if (result.status != 0)
     {
@@ -409,6 +472,9 @@ static bool WriteFitResult( FILE * fpLog, const FitResult & result )
         WriteLog( fpLog, "%8hs = %.9E ± %.9E (%.2g ± %.2g E-6)", FMT_HS(p.name),
                   FMT_F(p.value), FMT_F(p.error),
                   FMT_F(p.value*1E6), FMT_F(p.error*1E6) );
+
+        if (pFigureFile && p.upMinScan)
+            WriteGraph( *pFigureFile, *p.upMinScan );
     }
 
     WriteLog( fpLog, "------------------------------------------------------------" );
@@ -429,15 +495,6 @@ void FitEFT( const char * outputFileName,
     TH1::AddDirectory(kFALSE);
     // enable automatic sumw2 for every histogram
     TH1::SetDefaultSumw2(kTRUE);
-
-    //ROOT::Math::MinimizerOptions::SetDefaultMinimizer("Minuit2");
-
-    //ROOT::Math::MinimizerOptions minOpt;
-    //minOpt.Print();
-
-    //ROOT::Math::MinimizerOptions::PrintDefault("Minuit2");
-
-    //return;
 
     // ------
 
@@ -510,8 +567,8 @@ void FitEFT( const char * outputFileName,
 
     // fit each source hist to the target, varying only one parameter
 
-    typedef std::pair<const char *, int>                        NameIndexPair;
-    typedef std::map< NameIndexPair, FitResult > FitResultMap;
+    typedef std::pair<const char *, int>            NameIndexPair;
+    typedef std::map< NameIndexPair, FitResult >    FitResultMap;
 
     FitResultMap results;
 
@@ -546,14 +603,14 @@ void FitEFT( const char * outputFileName,
                                              source, srcCoefs, sourceEval,
                                              fitIndex );
 
-            if (!WriteFitResult( fpLog, fitResult ))
+            if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
                 ++fitFail;
 
             // cross-check
             CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
                                  source, srcCoefs, sourceEval );
 
-            results[ NameIndexPair(obs.name,fitIndex) ] = fitResult;
+            results[ NameIndexPair(obs.name,fitIndex) ] = std::move(fitResult);
         }
 
         WriteLog( fpLog, "\n------------------------------------------------------------" );
@@ -565,14 +622,14 @@ void FitEFT( const char * outputFileName,
                                          source, srcCoefs, sourceEval,
                                          -1 );
 
-        if (!WriteFitResult( fpLog, fitResult ))
+        if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
             ++fitFail;
 
         // cross-check
         CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
                              source, srcCoefs, sourceEval );
 
-        results[ NameIndexPair(obs.name,-1) ] = fitResult;
+        results[ NameIndexPair(obs.name,-1) ] = std::move(fitResult);
 
         // TODO: make figures from fit result
     }
