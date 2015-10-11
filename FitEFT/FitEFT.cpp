@@ -494,7 +494,8 @@ void FitEFT( const char * outputFileName,
 
         if (pFitTarget->InheritsFrom(TProfile::Class()))
         {
-            goodBad = ModelCompare::HistSplitGoodBadBins( pFitTarget, rawTargetData[obsIndex] );
+            goodBad = ModelCompare::HistSplitGoodBadBins( pFitTarget,         rawTargetData[obsIndex] );
+            goodBad = ModelCompare::HistSplitGoodBadBins( goodBad.good.get(), rawSourceData[obsIndex] );
             pFitTarget = goodBad.good.get();
         }
 
