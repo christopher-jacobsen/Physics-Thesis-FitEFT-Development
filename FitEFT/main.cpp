@@ -82,6 +82,12 @@ static const ModelCompare::ModelFileVector Models_1E6 =
     { "weight/EFT_all_weight_1E6.hepmc2g.gz",   "EFT_all",  "EFT",  42.8051, 0.0379205, 1000000 },
 };
 
+static const ModelCompare::ModelFileVector Models_1E6_Clipped =
+{
+    { "weight/SM_220_weight_1E6.hepmc2g.gz",    "SM_220",   "SM",   18.5537, 0.0156025, 185537, 185537 },
+    { "weight/EFT_all_weight_1E6.hepmc2g.gz",   "EFT_all",  "EFT",  42.8051, 0.0379205, 428051, 428051 },
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 
 static const RootUtil::CStringVector CoefNames_EFT_all =
@@ -137,6 +143,9 @@ int main(void)
 
 //    FitEFT::FitEFT( "fit/EFT_to_SM_1E4", Observables1, CoefNames_EFT_all, Models_1E4[0], FitParams_EFT_SM, Models_1E4[1], Params_EFT_all,
 //                    Luminosity, "fit/Cache_1E4.root" );
+
+//    FitEFT::FitEFT( "fit/EFT_to_SM_1E6_Clipped", Observables1, CoefNames_EFT_all, Models_1E6_Clipped[0], FitParams_EFT_SM, Models_1E6_Clipped[1], Params_EFT_all,
+//                    Luminosity, "fit/Cache_1E6_Clipped.root" );
 
     FitEFT::FitEFT( "fit/EFT_to_SM_1E6", Observables1, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
                     Luminosity, "fit/Cache_1E6.root" );
