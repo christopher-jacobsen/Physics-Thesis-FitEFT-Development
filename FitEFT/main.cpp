@@ -70,6 +70,57 @@ static const ModelCompare::ObservableVector Observables1 =
 
 ////////////////////////////////////////////////////////////////////////////////
 
+static const ModelCompare::ObservableVector Observables2 =
+{
+    // phase-space observables
+
+    { "PTZ", "P_{T}(Z)",  750,     0,  750, "P_{T}(Z) [GeV/c]", "Events per GeV/c",         GETOBS{ GetObs(s,v,c, GetObsPT,   24);     } },
+    { "MWZ", "M(WZ)",     1500,    0, 3000, "M(WZ) [GeV/c^2]",  "Events per 2 GeV/c^2",     GETOBS{ GetObs(s,v,c, GetObsMass, 24, 23); } },
+    { "RAZ", "Y(Z)",      200,    -5,    5, "Y(Z)",             "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsRap,  24);     } },
+//  { "ETZ", "#eta(Z)",   100,   -10,   10, "#eta(Z)",          "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsEta,  24);     } },
+//  { "PHZ", "#phi(Z)",   100, -M_PI, M_PI, "#phi(Z)",          "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsPhi,  24);     } },
+
+    // optimal observables
+
+    { "cWWW_O1",    "O_{1}(cWWW)",  2000,  -6E4,  7E3,  "O_{1}(cWWW) [GeV^{2}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_1_ocWWW"); } },
+    { "cWWW_O2",    "O_{2}(cWWW)",  10000,  0,   2E12,  "O_{2}(cWWW) [GeV^{4}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_1_1_ocWWW"); } },
+
+    { "cW_O1",      "O_{1}(cW)",    10000, -2E6,  2E4,  "O_{1}(cW) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_2_ocW");   } },
+    { "cW_O2",      "O_{2}(cW)",    10000,  0,   6E11,  "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
+
+    { "cB_O1",      "O_{1}(cB)",    1000,  -8E2, 5E3,   "O_{1}(cB) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_3_ocB");   } },
+    { "cB_O2",      "O_{2}(cB)",    10000,  0,   2E8,   "O_{2}(cB) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_3_3_ocB");   } },
+
+    // mean optimal observables
+
+//  { "s",          "#sqrt{s}",     1500, 0, 3000,  "#sqrt{s} [GeV]", "Events per bin",             GETOBS{ GetObs(s,v,c, GetObsSqrtS); } },  // same as M(WZ)
+
+    { "cWWW_O1vS",  "O_{1}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cWWW) [GeV^{2}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_1_ocWWW"); },    DefaultTProfileFactory },
+    { "cWWW_O2vS",  "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW) [GeV^{4}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_1_1_ocWWW"); },    DefaultTProfileFactory },
+
+    { "cW_O1vS",    "O_{1}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cW) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_2_ocW"); },      DefaultTProfileFactory },
+    { "cW_O2vS",    "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_2_2_ocW"); },      DefaultTProfileFactory },
+
+    { "cB_O1vS",    "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_3_ocB"); },      DefaultTProfileFactory },
+    { "cB_O2vS",    "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_3_3_ocB"); },      DefaultTProfileFactory },
+
+    //
+
+    { "cWWW_O1dSvS",    "O_{1}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cWWW)/s",             GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_1_ocWWW", 1); },    DefaultTProfileFactory },
+//  { "cWWW_O2dSvS",    "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s [GeV^{2}]",   GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 1); },    DefaultTProfileFactory },
+    { "cWWW_O2dS2vS",   "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s^{2}",         GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 2); },    DefaultTProfileFactory },
+
+    { "cW_O1dSvS",      "O_{1}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cW)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_2_ocW",   1); },    DefaultTProfileFactory },
+//  { "cW_O2dSvS",      "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   1); },    DefaultTProfileFactory },
+    { "cW_O2dS2vS",     "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   2); },    DefaultTProfileFactory },
+
+    { "cB_O1dSvS",      "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    DefaultTProfileFactory },
+//  { "cB_O2dSvS",      "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    DefaultTProfileFactory },
+    { "cB_O2dS2vS",     "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    DefaultTProfileFactory },
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
 static const ModelCompare::ModelFileVector Models_1E4 =
 {
     { "weight/SM_220_weight_1E4.hepmc2g.gz",    "SM_220",   "SM",   18.2613, 0.154079, 10000 },
@@ -149,6 +200,9 @@ int main(void)
 
     FitEFT::FitEFT( "fit/EFT_to_SM_1E6", Observables1, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
                     Luminosity, "fit/Cache_1E6.root" );
+
+//    FitEFT::FitEFT( "fit/EFT_to_SM_newbin_1E6", Observables2, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
+//                    Luminosity, "fit/Cache_newbin_1E6.root" );
 
     LogMsgInfo( "\nDone." );
     return 0;
