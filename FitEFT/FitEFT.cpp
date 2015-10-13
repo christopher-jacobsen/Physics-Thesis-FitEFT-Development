@@ -103,52 +103,13 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
                      const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
                      int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
 {
-// "L" : error independent of scale
-//   ocWWW =  1.407493792E-06 ± 3.929595539E-07
-//     ocW = -3.082096616E-07 ± 3.933420127E-07
-//     ocB = -7.768707211E-05 ± 3.818847769E-05
-// all:
-//   ocWWW = -1.133606645E-07 ± 9.302806678E-07
-//     ocW = -1.225535299E-06 ± 4.127463750E-07
-//     ocB = -8.837049483E-05 ± 2.475648113E-05
-
-// "WL" : error depends on scale for some parameters
-//   ocWWW =  1.407496157E-06 ± 1.535264034E-xx
-//     ocW = -3.082091173E-07 ± 3.105637463E-07
-//     ocB = -7.768706762E-05 ± 1.470158572E-05
-// all:
-//   ocWWW = -1.133630765E-07 ± 5.948353820E+xx
-//     ocW = -1.225537852E-06 ± 1.840232309E+xx
-//     ocB = -8.837058852E-05 ± 6.133336659E+xx
-
-  // PTZ:
-  //const Double_t  scale = 1;      // errors =    E-13,    E-7,    E-5 /    E-14    E-15    E-13 (error)
-  //const Double_t  scale = 1E-3;   // errors = 1.5E-10, 3.1E-7, 1.5E-5 / 4.9E-4  1.5E-4  5.1E-2  (warn)
-  //const Double_t  scale = 1E-6;   // errors = 1.5E-7,  3.1E-7, 1.5E-5 / 1.6E-5  5.1E-6  1.7E-3  (warn)
-  //const Double_t  scale = 1E-9;   // errors = 1.5E-4,  3.1E-7, 1.5E-5 / 5.9E-3  1.8E-3  6.1E-1
-  //const Double_t  scale = 1E-10;  // errors =    E-3,     E-7,    E-5 /    E-2     E-2     E+0
-  //const Double_t  scale = 1E-11;  // errors =    E-2,     E-7,    E-5 /    E-1     E-1     E+1
-  //const Double_t  scale = 1E-12;  // errors = 1.5E-1,  3.1E-7, 1.5E-5 / 5.9E+0  1.8E+0  6.1E+2
-  //const Double_t  scale = 1E-16;  // errors =    E-3,     E-7,    E-5 /    E+4     E+4     E+6
-
-  // O1(cWWW)
-//   ocWWW =  6.273085662E-09 ± 2.436393358E-17
-//     ocW =  6.982349016E-07 ± 4.581396056E-17
-//     ocB = -9.385725459E-06 ± 3.284975815E-15
-//
-//   ocWWW = -3.252253448E-10 ± 2.755932386E-17
-//     ocW =  6.960137960E-07 ± 4.635048099E-17
-//     ocB = -1.194507236E-06 ± 3.736071058E-15
-    const Double_t  scale = 1;      // errors = 2.4E-17,  4.6E-17, 3.3E-17 / 4.9E-18  4.6E-17  3.7E-15
-  //const Double_t  scale = 1E-6;   // errors = 2.4E-17,  4.6E-17, (Fail)  / 2.8E-17  4.6E-17  3.8E-15
-
     const Double_t  xmin  = target.GetXaxis()->GetXmin();
     const Double_t  xmax  = target.GetXaxis()->GetXmax();
     const Int_t     npar  = (Int_t)fitParam.size();
 
-    /////
-
+    //
     // define and setup fit lambda function
+    //
 
     size_t                      rejectCount(0);
     std::vector<Double_t>       lastPar(npar);
@@ -167,7 +128,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             (memcmp( lastPar.data(), par, npar * sizeof(*par)) != 0))
         {
             for (Int_t i = 0; i < npar; ++i)
-                targetParam[i].value = par[i] * scale;
+                targetParam[i].value = par[i];
 
             std::vector<double> targetEval;
             CalcEvalVector( coefNames, targetParam, targetEval );
@@ -200,8 +161,9 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
         return content;
     };
 
-    //////
-
+    //
+    // Construct fit data
+    //
 
     struct FitData
     {
@@ -242,21 +204,27 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     FitData fitData( target );
 
+    //
     // setup fit function
+    //
 
     TF1 fitFunc( "EFT", EFTFunc, xmin, xmax, npar );
 
     for (Int_t i = 0; i < npar; ++i)
     {
         fitFunc.SetParName(   i, fitParam[i].name );
-        fitFunc.SetParameter( i, fitParam[i].initValue / scale );
-        fitFunc.SetParLimits( i, fitParam[i].minValue / scale, fitParam[i].maxValue / scale );
-	
-        // set initial step (helps fit converge)
-        fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 1E6 / scale );
+        fitFunc.SetParameter( i, fitParam[i].initValue );
 
         if ((fitIndex >= 0) && (i != fitIndex))
-            fitFunc.FixParameter( i, fitParam[i].initValue / scale );
+        {
+            fitFunc.FixParameter( i, fitParam[i].initValue );
+            fitFunc.SetParError(  i, 0.0 );
+        }
+        else
+        {
+            fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
+            fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 1E6 ); // set initial step (helps fit converge)
+        }
     }
 
     //
@@ -370,9 +338,9 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     FitResult result;
     {
-        result.chi2     = fitFunc.GetChisquare();
-        result.ndf      = fitFunc.GetNDF();
-        result.prob     = fitFunc.GetProb();
+        result.chi2     = fitStatus->Chi2();
+        result.ndf      = fitStatus->Ndf();
+        result.prob     = fitStatus->Prob();
         result.chi2_ndf = (result.ndf > 0 ? result.chi2 / result.ndf : 0);
 
         // get last Fitter object used internally by last Fit call
@@ -388,8 +356,8 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             FitResult::Param resultParam;
 
             resultParam.name  = fitParam[i].name;
-            resultParam.value = fitFunc.GetParameter(i) * scale;
-            resultParam.error = fitFunc.GetParError(i)  * scale;
+            resultParam.value = fitStatus->Parameter(i);
+            resultParam.error = fitStatus->ParError(i);
 
             // create a minimization scan
             if (pMinimizer)
@@ -398,8 +366,8 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
                 TGraph * pGraph = resultParam.upMinScan.get();  // alias
 
                 // do +/- 2x error scan (default range)
-                double scanMin = fitFunc.GetParameter(i) - 2 * fitFunc.GetParError(i);
-                double scanMax = fitFunc.GetParameter(i) + 2 * fitFunc.GetParError(i);
+                double scanMin = resultParam.value - 2 * resultParam.error;
+                double scanMax = resultParam.value + 2 * resultParam.error;
 
                 // scan symmetric around 0.0 point
                 scanMin = std::min( scanMin, -scanMax );
