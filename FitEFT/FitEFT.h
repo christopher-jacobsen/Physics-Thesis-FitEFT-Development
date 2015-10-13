@@ -20,6 +20,16 @@ namespace FitEFT
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void LoadTupleData( const ModelCompare::ObservableVector & observables, const ModelCompare::ModelFile & model,
+                    RootUtil:: TupleVector & modelData,
+                    const char * cacheFileName );
+
+void LoadTupleData( const ModelCompare::ObservableVector & observables, const ModelCompare::ModelFileVector & models,
+                    std::vector<RootUtil::TupleVector> & allData,
+                    const char * cacheFileName );
+
+////////////////////////////////////////////////////////////////////////////////
+
 struct FitParam
 {
     const char * name;
