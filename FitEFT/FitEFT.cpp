@@ -13,8 +13,10 @@
 #include <TFile.h>
 #include <TH1.h>
 #include <TProfile.h>
+
 #include <TF1.h>
 #include <TGraph.h>
+#include <TGraphErrors.h>
 
 #include <TFitResult.h>
 #include <TVirtualFitter.h>
@@ -24,9 +26,51 @@
 using namespace RootUtil;
 
 ////////////////////////////////////////////////////////////////////////////////
-
 namespace FitEFT
 {
+
+////////////////////////////////////////////////////////////////////////////////
+TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = true )
+{
+    const Int_t nBins = profile.GetNbinsX();
+
+    TGraphErrors * pGraphErrors =  bWithErrors ? new TGraphErrors( nBins ) : nullptr;
+    TGraph *       pGraph       = !bWithErrors ? new TGraph(       nBins ) : pGraphErrors;
+
+    // copy name and titles
+    pGraph->SetName(  profile.GetName()  );
+    pGraph->SetTitle( profile.GetTitle() );
+    pGraph->GetXaxis()->SetTitle( profile.GetXaxis()->GetTitle() );
+    pGraph->GetYaxis()->SetTitle( profile.GetYaxis()->GetTitle() );
+
+    Int_t index = 0;
+    for (Int_t bin = 1; bin <= nBins; ++bin)
+    {
+        Double_t nEff = profile.GetBinEffectiveEntries(bin);
+        if (nEff <= 0.0)
+            continue;
+
+        Double_t xValue = profile.GetBinCenter(bin);
+        Double_t yValue = profile.GetBinContent(bin);
+
+        pGraph->SetPoint( index, xValue, yValue );
+
+        if (pGraphErrors)
+        {
+            Double_t yError = profile.GetBinError(bin);
+
+            pGraphErrors->SetPointError( index, 0.0, yError );    // xError not defined
+        }
+
+        ++index;
+    }
+
+    pGraph->Set(index);
+
+    return pGraph;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 struct FitResult
 {
@@ -157,6 +201,46 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     //////
 
+
+    struct FitData
+    {
+        FitData( const TH1D & data )
+        {
+            upHist.reset( (TH1D *)data.Clone() );   // clone hist as Fit is not const
+
+            if (upHist->InheritsFrom(TProfile::Class()))
+            {
+                TProfile * pProfile = static_cast<TProfile *>(upHist.get());
+                pProfile->SetErrorOption("");
+                upGraph.reset( GraphFromProfile( *pProfile ) );
+            }
+        }
+
+        TFitResultPtr Fit( TF1 * f1, Option_t * option = "" )
+        {
+            if (upGraph)
+                return upGraph->Fit( f1, (std::string(option) + " EX0").c_str() );
+            else
+                return upHist ->Fit( f1, option );
+        }
+
+        Double_t Chisquare( TF1 * f1 )
+        {
+            if (upGraph)
+                return upGraph->Chisquare( f1 );
+            else
+                return upHist ->Chisquare( f1 );
+        }
+
+        bool IsHist()    const { return !upGraph;  }
+        bool IsProfile() const { return !!upGraph; }
+
+        std::unique_ptr<TH1D>       upHist;
+        std::unique_ptr<TGraph>     upGraph;
+    };
+
+    FitData fitData( target );
+
     // setup fit function
 
     TF1 fitFunc( "EFT", EFTFunc, xmin, xmax, npar );
@@ -174,8 +258,6 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             fitFunc.FixParameter( i, fitParam[i].initValue / scale );
     }
 
-    TH1DUniquePtr pFitHist{ (TH1D *)target.Clone() };     // clone hist as Fit is not const
-
     // setup fit options
     // do not use M - it produces too many warnings of:
     // "FUNCTION VALUE DOES NOT SEEM TO DEPEND ON ANY OF THE 1 VARIABLE PARAMETERS. VERIFY THAT STEP SIZES ARE BIG ENOUGH AND CHECK FCN LOGIC."
@@ -186,7 +268,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // use log-likelihood for TH1D but not TProfile
     // Note: do not use "WL" as it does something weird
 
-    bool bLogLike = !target.InheritsFrom(TProfile::Class());
+    bool bLogLike = fitData.IsHist();
     if (bLogLike)
     {
         fitOption1 += " L";
@@ -199,7 +281,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // first fit with limits
     //
 
-    fitStatus = pFitHist->Fit( &fitFunc, fitOption1.c_str() );
+    fitStatus = fitData.Fit( &fitFunc, fitOption1.c_str() );
     if ((int)fitStatus != 0)
     {
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
@@ -223,7 +305,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     // re-run fit using result from previous fit as initial values
     // including parameter errors that are used to setup fit steps
-    fitStatus = pFitHist->Fit( &fitFunc, fitOption2.c_str() );
+    fitStatus = fitData.Fit( &fitFunc, fitOption2.c_str() );
     if ((int)fitStatus != 0)
     {
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))   // ignore improve (M) errors
@@ -339,7 +421,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     // cross-check chi2
     {
-        Double_t chi2 = target.Chisquare( &fitFunc );
+        Double_t chi2 = fitData.Chisquare( &fitFunc );
 
         LogMsgInfo( "Cross-check chi2: %g", FMT_F(chi2) );
     }
