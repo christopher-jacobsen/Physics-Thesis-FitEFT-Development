@@ -100,6 +100,82 @@ struct FitResult
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+FitResult ConstructFitResult( const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex, const char * objectiveTitle )
+{
+    FitResult result;
+
+    result.chi2     = fitStatus.Chi2();
+    result.ndf      = fitStatus.Ndf();
+    result.prob     = fitStatus.Prob();
+    result.chi2_ndf = (result.ndf > 0 ? result.chi2 / result.ndf : 0);
+
+    // get last Fitter object used internally by last Fit call
+    TVirtualFitter  *       pFitter      = TVirtualFitter::GetFitter();
+    TBackCompFitter *       pBackFitter  = pFitter->InheritsFrom(TBackCompFitter::Class()) ? static_cast<TBackCompFitter *>(pFitter) : nullptr;
+    ROOT::Math::Minimizer * pMinimizer   = pBackFitter ? pBackFitter->GetMinimizer() : nullptr;
+
+    for (Int_t i = 0; i < fitParam.size(); ++i)
+    {
+        if ((fitIndex >= 0) && (i != fitIndex))
+            continue;
+
+        FitResult::Param resultParam;
+
+        resultParam.name  = fitParam[i].name;
+        resultParam.value = fitStatus.Parameter(i);
+        resultParam.error = fitStatus.ParError(i);
+
+        if (fitStatus.HasMinosError(i))
+        {
+            resultParam.minosError[0] = fitStatus.LowerError(i);
+            resultParam.minosError[1] = fitStatus.UpperError(i);
+        }
+
+        // create a minimization scan
+        if (pMinimizer)
+        {
+            resultParam.upMinScan.reset( new TGraph( (Int_t)100 ) );
+            TGraph * pGraph = resultParam.upMinScan.get();  // alias
+
+            // do +/- 2x error scan (default range)
+            double scanMin = resultParam.value - 2 * resultParam.error;
+            double scanMax = resultParam.value + 2 * resultParam.error;
+
+            // scan symmetric around 0.0 point
+            scanMin = std::min( scanMin, -scanMax );
+            scanMax = std::max( scanMax, -scanMin );
+
+            unsigned int nStep = pGraph->GetN();
+            bool scanResult = pMinimizer->Scan( i, nStep, pGraph->GetX(), pGraph->GetY(), scanMin, scanMax );
+            if (!scanResult || (nStep == 0))
+            {
+                // failed
+                resultParam.upMinScan.reset();
+                pGraph = nullptr;
+            }
+            else
+            {
+                // success
+                pGraph->Set( (Int_t)nStep );  // resize to actual steps
+
+                std::string sName  = ((fitIndex < 0) ? "min_all_"  : "min_one_") + std::string(obs.name)  + "_" + std::string(resultParam.name);
+                std::string sTitle = std::string(obs.title) + ": fit min. for " + std::string(resultParam.name) + ((fitIndex < 0) ? " (all)" : " (one)");
+
+                pGraph->SetName(  sName .c_str() );
+                pGraph->SetTitle( sTitle.c_str() );
+
+                pGraph->GetXaxis()->SetTitle( resultParam.name );
+                pGraph->GetYaxis()->SetTitle( objectiveTitle   );
+            }
+        }
+
+        result.param.push_back( std::move(resultParam) );
+    }
+
+    return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 class ReweightPDFFunc
 {
 public:
@@ -369,76 +445,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     // fill in result
 
-    FitResult result;
-    {
-        result.chi2     = fitStatus->Chi2();
-        result.ndf      = fitStatus->Ndf();
-        result.prob     = fitStatus->Prob();
-        result.chi2_ndf = (result.ndf > 0 ? result.chi2 / result.ndf : 0);
-
-        // get last Fitter object used internally by last Fit call
-        TVirtualFitter  *       pFitter      = TVirtualFitter::GetFitter();
-        TBackCompFitter *       pBackFitter  = pFitter->InheritsFrom(TBackCompFitter::Class()) ? static_cast<TBackCompFitter *>(pFitter) : nullptr;
-        ROOT::Math::Minimizer * pMinimizer   = pBackFitter ? pBackFitter->GetMinimizer() : nullptr;
-
-        for (Int_t i = 0; i < npar; ++i)
-        {
-            if ((fitIndex >= 0) && (i != fitIndex))
-                continue;
-
-            FitResult::Param resultParam;
-
-            resultParam.name  = fitParam[i].name;
-            resultParam.value = fitStatus->Parameter(i);
-            resultParam.error = fitStatus->ParError(i);
-
-            if (fitStatus->HasMinosError(i))
-            {
-                resultParam.minosError[0] = fitStatus->LowerError(i);
-                resultParam.minosError[1] = fitStatus->UpperError(i);
-            }
-
-            // create a minimization scan
-            if (pMinimizer)
-            {
-                resultParam.upMinScan.reset( new TGraph( (Int_t)100 ) );
-                TGraph * pGraph = resultParam.upMinScan.get();  // alias
-
-                // do +/- 2x error scan (default range)
-                double scanMin = resultParam.value - 2 * resultParam.error;
-                double scanMax = resultParam.value + 2 * resultParam.error;
-
-                // scan symmetric around 0.0 point
-                scanMin = std::min( scanMin, -scanMax );
-                scanMax = std::max( scanMax, -scanMin );
-
-                unsigned int nStep = pGraph->GetN();
-                bool scanResult = pMinimizer->Scan( i, nStep, pGraph->GetX(), pGraph->GetY(), scanMin, scanMax );
-                if (!scanResult || (nStep == 0))
-                {
-                    // failed
-                    resultParam.upMinScan.reset();
-                    pGraph = nullptr;
-                }
-                else
-                {
-                    // success
-                    pGraph->Set( (Int_t)nStep );  // resize to actual steps
-
-                    std::string sName  = ((fitIndex < 0) ? "min_all_"  : "min_one_") + std::string(obs.name)  + "_" + std::string(fitParam[i].name);
-                    std::string sTitle = std::string(obs.title) + ": fit min. for " + std::string(fitParam[i].name) + ((fitIndex < 0) ? " (all)" : " (one)");
-
-                    pGraph->SetName(  sName .c_str() );
-                    pGraph->SetTitle( sTitle.c_str() );
-
-                    pGraph->GetXaxis()->SetTitle( fitParam[i].name );
-                    pGraph->GetYaxis()->SetTitle( bLogLike ? "Log likelihood" : "#chi^{2}" );
-                }
-            }
-
-            result.param.push_back( std::move(resultParam) );
-        }
-    }
+    FitResult result = ConstructFitResult( *fitStatus, obs, fitParam, fitIndex, bLogLike ? "Log likelihood" : "#chi^{2}" );
 
     // cross-check chi2
     {
