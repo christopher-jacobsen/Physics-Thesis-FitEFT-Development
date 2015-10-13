@@ -77,9 +77,10 @@ struct FitResult
 {
     struct Param
     {
-        const char *    name;
-        double          value;
-        double          error;
+        const char *    name            = nullptr;
+        double          value           = 0;
+        double          error           = 0;
+        double          minosError[2]   = { };
 
         std::unique_ptr<TGraph> upMinScan;
     };
@@ -235,7 +236,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // "FUNCTION VALUE DOES NOT SEEM TO DEPEND ON ANY OF THE 1 VARIABLE PARAMETERS. VERIFY THAT STEP SIZES ARE BIG ENOUGH AND CHECK FCN LOGIC."
 
     std::string fitOption1 = "N Q";
-    std::string fitOption2 = "N S";
+    std::string fitOption2 = "N S E";  // E=hesse error (invert error matrix) and run minos errors
 
     // use log-likelihood for TH1D but not TProfile
     // Note: do not use "WL" as it does something weird
@@ -359,6 +360,12 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             resultParam.value = fitStatus->Parameter(i);
             resultParam.error = fitStatus->ParError(i);
 
+            if (fitStatus->HasMinosError(i))
+            {
+                resultParam.minosError[0] = fitStatus->LowerError(i);
+                resultParam.minosError[1] = fitStatus->UpperError(i);
+            }
+
             // create a minimization scan
             if (pMinimizer)
             {
@@ -439,10 +446,10 @@ static TH1D * CreateReweightFitResult( const CStringVector & coefNames,
             itr->value = p.value;
         }
 
-        for (const auto & t : targetParam)
-        {
-            LogMsgInfo( "> %hs = %g", FMT_HS(t.name), FMT_F(t.value) );
-        }
+        //for (const auto & t : targetParam)
+        //{
+        //    LogMsgInfo( "> %hs = %g", FMT_HS(t.name), FMT_F(t.value) );
+        //}
     }
 
     // construct target evaluation
@@ -526,22 +533,24 @@ static bool WriteFitResult( FILE * fpLog, const FitResult & result, TFile * pFig
         return false;
     }
 
-    WriteLog( fpLog, "------------------------------------------------------------" );
+    WriteLog( fpLog, "----------------------------------------------------------------------------------------------------" );
 
     WriteLog( fpLog, "chi2 / ndf = %g / %g = %g (%.2g)", FMT_F(result.chi2), FMT_F(result.ndf), FMT_F(result.chi2_ndf), FMT_F(result.chi2_ndf) );
     WriteLog( fpLog, "prob = %g\n", FMT_F(result.prob) );
 
     for (const FitResult::Param & p : result.param)
     {
-        WriteLog( fpLog, "%8hs = %.9E ± %.9E (%.2g ± %.2g E-6)", FMT_HS(p.name),
-                  FMT_F(p.value), FMT_F(p.error),
-                  FMT_F(p.value*1E6), FMT_F(p.error*1E6) );
+        WriteLog( fpLog, "%8hs = %E ± %E [%.2E, %.2E] | %8.2g ± %-6.2g [%.2g, %.2g]  E-6",
+                  FMT_HS(p.name),
+                  FMT_F(p.value),     FMT_F(p.error),     FMT_F(p.minosError[0]),     FMT_F(p.minosError[1]),
+                  FMT_F(p.value*1E6), FMT_F(p.error*1E6), FMT_F(p.minosError[0]*1E6), FMT_F(p.minosError[1]*1E6)
+                );
 
         if (pFigureFile && p.upMinScan)
             WriteGraph( *pFigureFile, *p.upMinScan );
     }
 
-    WriteLog( fpLog, "------------------------------------------------------------" );
+    WriteLog( fpLog, "----------------------------------------------------------------------------------------------------" );
 
     return true;
 }
@@ -735,13 +744,36 @@ void FitEFT( const char * outputFileName,
 
             const FitResult::Param & parAll = *itrPar;
 
-            WriteLog( fpLog, "%12hs: %6.2g | %6.2g | %6.2g || %6.2g | %6.2g | %6.2g ||"
-                             "       %.15E | %.15E | %.15E | %.15E",
-                        FMT_HS(obs.name),
-                        FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6), FMT_F(fitOne.chi2_ndf),
-                        FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6), FMT_F(fitAll.chi2_ndf),
-                        FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6),
-                        FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6)
+            auto GetMinos = [](const FitResult::Param & par, double scale = 1E6) -> std::string
+            {
+                double err = par.error         * scale;
+                double lwr = par.minosError[0] * scale;
+                double upr = par.minosError[1] * scale;
+
+                if ((lwr == 0.0) && (upr == 0.0)) return std::string();
+
+                std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
+                std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
+                std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
+
+                if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
+
+                return StringFormat( "(%.2g, %.2g)", FMT_F(lwr), FMT_F(upr) );
+            };
+
+            std::string minosOne = GetMinos(parOne);
+            std::string minosAll = GetMinos(parAll);
+
+            WriteLog( fpLog, "%12hs: %8.2g | %6.2g %16hs | %6.2g || %8.2g | %6.2g %16hs | %6.2g"
+
+                           //"    || %.15E | %.15E | %.15E | %.15E"
+
+                        , FMT_HS(obs.name)
+                        , FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6), FMT_HS(minosOne.c_str()), FMT_F(fitOne.chi2_ndf)
+                        , FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6), FMT_HS(minosAll.c_str()), FMT_F(fitAll.chi2_ndf)
+
+                      //, FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6)
+                      //, FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6)
                     );
         }
     }
