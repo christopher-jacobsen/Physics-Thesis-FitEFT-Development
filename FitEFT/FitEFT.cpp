@@ -100,49 +100,47 @@ struct FitResult
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
-                     const TH1D & target, const FitParamVector & fitParam,
-                     const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
-                     int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+class ReweightPDFFunc
 {
-    const Double_t  xmin  = target.GetXaxis()->GetXmin();
-    const Double_t  xmax  = target.GetXaxis()->GetXmax();
-    const Int_t     npar  = (Int_t)fitParam.size();
-
-    //
-    // define and setup fit lambda function
-    //
-
-    size_t                      rejectCount(0);
-    std::vector<Double_t>       lastPar(npar);
-    ConstTH1DUniquePtr          upLastSourceReweight;
-    ReweightEFT::ParamVector    targetParam(npar);
-
-    for (Int_t i = 0; i < npar; ++i)
+public:
+    ReweightPDFFunc( const CStringVector & coefNames,
+                     const FitParamVector & fitParam,
+                     const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
+    :
+        m_nPar(        fitParam.size()  ),
+        m_coefNames(   coefNames        ),
+        m_source(      source           ),
+        m_sourceCoefs( sourceCoefs      ),
+        m_sourceEval(  sourceEval       ),
+        m_lastPar(     fitParam.size()  ),
+        m_targetParam( fitParam.size()  )
     {
-        targetParam[i].name  = fitParam[i].name;
-        targetParam[i].value = fitParam[i].initValue;
+        for (Int_t i = 0; i < m_nPar; ++i)
+        {
+            m_targetParam[i].name  = fitParam[i].name;
+            m_targetParam[i].value = fitParam[i].initValue;
+        }
     }
 
-    auto EFTFunc = [&](const Double_t * x, const Double_t * par) -> Double_t
+    Double_t operator()( const Double_t * x, const Double_t * par )
     {
-        if (!upLastSourceReweight ||
-            (memcmp( lastPar.data(), par, npar * sizeof(*par)) != 0))
+        if (!m_upLastSourceReweight ||
+            (memcmp( m_lastPar.data(), par, m_nPar * sizeof(*par)) != 0))
         {
-            for (Int_t i = 0; i < npar; ++i)
-                targetParam[i].value = par[i];
+            for (Int_t i = 0; i < m_nPar; ++i)
+                m_targetParam[i].value = par[i];
 
             std::vector<double> targetEval;
-            CalcEvalVector( coefNames, targetParam, targetEval );
+            CalcEvalVector( m_coefNames, m_targetParam, targetEval );
 
-            upLastSourceReweight.reset(
-                ReweightEFT::ReweightHist( source, sourceCoefs, sourceEval, targetEval,
+            m_upLastSourceReweight.reset(
+                ReweightEFT::ReweightHist( m_source, m_sourceCoefs, m_sourceEval, targetEval,
                                            "RWFitHist", "RWFitHist" ) );
 
-            memcpy( lastPar.data(), par, npar * sizeof(*par) );
+            memcpy( m_lastPar.data(), par, m_nPar * sizeof(*par) );
         }
 
-        const TH1D * pHist = upLastSourceReweight.get();
+        const TH1D * pHist = m_upLastSourceReweight.get();
 
         Double_t xVal    = x[0];
         Int_t    bin     = pHist->FindFixBin( xVal );
@@ -155,13 +153,44 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
         if (nEff <= 0)
         {
             // LogMsgInfo( ">>>> Rejecting bin %i <<<<", bin );
-            ++rejectCount;
+            ++m_rejectCount;
             TF1::RejectPoint();
             return 0;
         }
 
         return content;
-    };
+    }
+
+    void Reset()
+    {
+        m_upLastSourceReweight.reset();
+        m_rejectCount = 0;
+    }
+
+    size_t RejectCount() const { return m_rejectCount; }
+
+private:
+    const size_t                    m_nPar;
+    const CStringVector &           m_coefNames;
+    const TH1D &                    m_source;
+    const ConstTH1DVector &         m_sourceCoefs;
+    const std::vector<double> &     m_sourceEval;
+
+    std::vector<Double_t>           m_lastPar;
+    ReweightEFT::ParamVector        m_targetParam;
+    ConstTH1DUniquePtr              m_upLastSourceReweight;
+    size_t                          m_rejectCount               = 0;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
+                     const TH1D & target, const FitParamVector & fitParam,
+                     const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
+                     int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+{
+    const Double_t  xmin  = target.GetXaxis()->GetXmin();
+    const Double_t  xmax  = target.GetXaxis()->GetXmax();
+    const Int_t     npar  = (Int_t)fitParam.size();
 
     //
     // Construct fit data
@@ -207,10 +236,12 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     FitData fitData( target );
 
     //
-    // setup fit function
+    // setup fit model function
     //
 
-    TF1 fitFunc( "EFT", EFTFunc, xmin, xmax, npar );
+    ReweightPDFFunc modelFunc( coefNames, fitParam, source, sourceCoefs, sourceEval );
+
+    TF1 fitFunc( "EFT", &modelFunc, xmin, xmax, npar );
 
     for (Int_t i = 0; i < npar; ++i)
     {
@@ -285,7 +316,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             fitFunc.ReleaseParameter(i);
     }
 
-    rejectCount = 0;
+    modelFunc.Reset();
 
     // re-run fit using result from previous fit as initial values
     // including parameter errors that are used to setup fit steps
@@ -334,7 +365,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     fitStatus->Print();
 
-    LogMsgInfo( "\nReject Count: %u", FMT_U(rejectCount) );
+    LogMsgInfo( "\nReject Count: %u", FMT_U(modelFunc.RejectCount()) );
 
     // fill in result
 
