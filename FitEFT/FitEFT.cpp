@@ -541,11 +541,18 @@ void LoadTupleData( const ModelCompare::ObservableVector & observables, const Mo
 
     for (const ModelCompare::Observable & obs : observables)
     {
+        if (obs.nDim != 1)
+        {
+            loadData .push_back(nullptr);
+            modelData.push_back(nullptr);
+            continue;
+        }
+
         // make a n-tuple
         TNtupleD * pTuple = nullptr;
         {
-            std::string sName  = obs.BuildHistName(  model.modelName  );
-            std::string sTitle = obs.BuildHistTitle( model.modelTitle );
+            std::string sName  = "data_" + obs.BuildHistName(  model.modelName  );
+            std::string sTitle =           obs.BuildHistTitle( model.modelTitle );
 
             pTuple = new TNtupleD( sName.c_str(), sTitle.c_str(), obs.name );
             pTuple->SetDirectory( nullptr );  // decouple from any directory
@@ -682,62 +689,75 @@ void FitEFT( const char * outputFileName,
 
     // ------
 
-    std::string rootFileName = std::string(outputFileName) + ".root";
-    std::string logFileName  = std::string(outputFileName) + ".txt";
+    std::string outFileName = std::string(outputFileName) + ".root";
+    std::string logFileName = std::string(outputFileName) + ".txt";
 
-    LogMsgInfo( "Root output file: %hs", FMT_HS(rootFileName.c_str()) );
-    std::unique_ptr<TFile> upOutputFile( new TFile( rootFileName.c_str(), "RECREATE" ) );
+    std::string cacheHistFileName(cacheFileName);
+    std::string cacheTreeFileName(cacheFileName);
+
+    if (!cacheHistFileName.empty()) cacheHistFileName += "_hist.root";
+    if (!cacheTreeFileName.empty()) cacheTreeFileName += "_tree.root";
+
+    LogMsgInfo( "Root output file: %hs", FMT_HS(outFileName.c_str()) );
+    std::unique_ptr<TFile> upOutputFile( new TFile( outFileName.c_str(), "RECREATE" ) );
     if (upOutputFile->IsZombie() || !upOutputFile->IsOpen())    // IsZombie is true if constructor failed
     {
-        LogMsgError( "Failed to create output file (%hs).", FMT_HS(rootFileName.c_str()) );
-        ThrowError( std::invalid_argument( rootFileName ) );
+        LogMsgError( "Failed to create output file (%hs).", FMT_HS(outFileName.c_str()) );
+        ThrowError( std::invalid_argument( outFileName ) );
     }
 
     LogMsgInfo( "Log output file: %hs", FMT_HS(logFileName.c_str()) );
     FILE * fpLog = fopen( logFileName.c_str(), "wt" );
 
+    // load input trees
+
+    TupleVector targetTrees;    // targetTrees[observable]
+
+    LoadTupleData( observables, targetFile, targetTrees, cacheTreeFileName.c_str() );
+
     // load input histograms
 
-    TH1DVector              targetData;     // targetData[observable]
-    TH1DVector              sourceData;     // sourceData[observable]
-    std::vector<TH1DVector> sourceCoefs;    // sourceCoefs[observable][coefficient]
-    std::vector<double>     sourceEval;     // sourceEval[coefficient]
-    TH1DVector              rawTargetData;  // rawTargetData[observable]
-    TH1DVector              rawSourceData;  // rawSourceData[observable]
+    TH1DVector              targetHists;        // targetHists[observable]
+    TH1DVector              sourceHists;        // sourceHists[observable]
+    std::vector<TH1DVector> sourceCoefs;        // sourceCoefs[observable][coefficient]
+    std::vector<double>     sourceEval;         // sourceEval[coefficient]
+    TH1DVector              rawtargetHists;     // rawtargetHists[observable]
+    TH1DVector              rawsourceHists;     // rawsourceHists[observable]
 
     ReweightEFT::LoadReweightFiles( observables, coefNames, targetFile, sourceFile, sourceParam,    // inputs
-                                    targetData, sourceData, sourceCoefs, sourceEval,                // outputs
-                                    rawTargetData, rawSourceData,
-                                    luminosity, cacheFileName );                                    // optionals
+                                    targetHists, sourceHists, sourceCoefs, sourceEval,              // outputs
+                                    rawtargetHists, rawsourceHists,
+                                    luminosity, cacheHistFileName.c_str() );                        // optionals
+
 
     // write input hists
 
-    WriteHists( upOutputFile.get(), targetData );   // output file takes ownership of histograms
-    WriteHists( upOutputFile.get(), sourceData );   // output file takes ownership of histograms
+    WriteHists( upOutputFile.get(), targetHists );   // output file takes ownership of histograms
+    WriteHists( upOutputFile.get(), sourceHists );   // output file takes ownership of histograms
 
     // uncomment to save coefficent hists to file
     //  for (const auto & coefData : sourceCoefs)
     //      WriteHists( upOutputFile.get(), coefData );  // output file takes ownership of histograms
 
     LogMsgInfo("");
-    LogMsgHistBinCounts( ToConstTH1DVector(targetData) );
+    LogMsgHistBinCounts( ToConstTH1DVector(targetHists) );
     LogMsgInfo("");
-    LogMsgHistBinCounts( ToConstTH1DVector(sourceData) );
+    LogMsgHistBinCounts( ToConstTH1DVector(sourceHists) );
     LogMsgInfo("");
-    LogMsgHistBinCounts( ToConstTH1DVector(targetData), ToConstTH1DVector(sourceData) );
+    LogMsgHistBinCounts( ToConstTH1DVector(targetHists), ToConstTH1DVector(sourceHists) );
     LogMsgInfo("");
 
     /*
-    // replace targetData errors with sqrt(N) errors - Asimov samples
-    // The current errors on targetData, are errors on the expectation value.
+    // replace targetHists errors with sqrt(N) errors - Asimov samples
+    // The current errors on targetHists, are errors on the expectation value.
     // To convert this to pseudo-data, we keep the expectation value, but replace
     // the errors with sqrt(binContent).
 
     LogMsgInfo("------------ Before Asimov ------------");
-    targetData[0]->Print("all");
-    LogMsgHistStats(*targetData[0]);
+    targetHists[0]->Print("all");
+    LogMsgHistStats(*targetHists[0]);
 
-    for (TH1D * pHist : targetData)
+    for (TH1D * pHist : targetHists)
     {
         pHist->Sumw2(kFALSE);
         pHist->Sumw2(kTRUE);
@@ -745,8 +765,8 @@ void FitEFT( const char * outputFileName,
     }
 
     LogMsgInfo("------------ After Asimov ------------");
-    LogMsgHistStats(*targetData[0]);
-    targetData[0]->Print("all");
+    LogMsgHistStats(*targetHists[0]);
+    targetHists[0]->Print("all");
     */
 
     // fit each source hist to the target, varying only one parameter
@@ -761,8 +781,8 @@ void FitEFT( const char * outputFileName,
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
     {
         const ModelCompare::Observable &    obs         = observables[obsIndex];
-        const TH1D *                        pFitTarget  = targetData[obsIndex];
-        const TH1D &                        source      = *sourceData[obsIndex];
+        const TH1D *                        pFitTarget  = targetHists[obsIndex];
+        const TH1D &                        source      = *sourceHists[obsIndex];
         const ConstTH1DVector               srcCoefs    = ToConstTH1DVector(sourceCoefs[obsIndex]);
 
         ModelCompare::GoodBadHists goodBad;
@@ -771,8 +791,8 @@ void FitEFT( const char * outputFileName,
 
         if (pFitTarget->InheritsFrom(TProfile::Class()))
         {
-            goodBad = ModelCompare::HistSplitGoodBadBins( pFitTarget,         rawTargetData[obsIndex] );
-            goodBad = ModelCompare::HistSplitGoodBadBins( goodBad.good.get(), rawSourceData[obsIndex] );
+            goodBad = ModelCompare::HistSplitGoodBadBins( pFitTarget,         rawtargetHists[obsIndex] );
+            goodBad = ModelCompare::HistSplitGoodBadBins( goodBad.good.get(), rawsourceHists[obsIndex] );
             pFitTarget = goodBad.good.get();
         }
 

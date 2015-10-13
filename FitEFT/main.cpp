@@ -193,16 +193,16 @@ int main(void)
   //FitEFT::FitEFT( "fit/EFT_to_self_1E4", Observables1, CoefNames_EFT_all, Models_1E4[1], FitParams_EFT_all, Models_1E4[1], Params_EFT_all );
 
 //    FitEFT::FitEFT( "fit/EFT_to_SM_1E4", Observables1, CoefNames_EFT_all, Models_1E4[0], FitParams_EFT_SM, Models_1E4[1], Params_EFT_all,
-//                    Luminosity, "fit/Cache_1E4.root" );
+//                    Luminosity, "fit/Cache_1E4" );
 
 //    FitEFT::FitEFT( "fit/EFT_to_SM_1E6_Clipped", Observables1, CoefNames_EFT_all, Models_1E6_Clipped[0], FitParams_EFT_SM, Models_1E6_Clipped[1], Params_EFT_all,
-//                    Luminosity, "fit/Cache_1E6_Clipped.root" );
+//                    Luminosity, "fit/Cache_1E6_Clipped" );
 
     FitEFT::FitEFT( "fit/EFT_to_SM_1E6", Observables1, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
-                    Luminosity, "fit/Cache_1E6.root" );
+                    Luminosity, "fit/Cache_1E6" );
 
 //    FitEFT::FitEFT( "fit/EFT_to_SM_newbin_1E6", Observables2, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
-//                    Luminosity, "fit/Cache_newbin_1E6.root" );
+//                    Luminosity, "fit/Cache_newbin_1E6" );
 
     LogMsgInfo( "\nDone." );
     return 0;
