@@ -44,28 +44,28 @@ static const ModelCompare::ObservableVector Observables1 =
 
 //  { "s",          "#sqrt{s}",     100, 0, 3000,   "#sqrt{s} [GeV]", "Events per bin",             GETOBS{ GetObs(s,v,c, GetObsSqrtS); } },  // same as M(WZ)
 
-    { "cWWW_O1vS",  "O_{1}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cWWW) [GeV^{2}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_1_ocWWW"); },    DefaultTProfileFactory },
-    { "cWWW_O2vS",  "O_{2}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cWWW) [GeV^{4}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_1_1_ocWWW"); },    DefaultTProfileFactory },
+    { "cWWW_O1vS",  "O_{1}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cWWW) [GeV^{2}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_1_ocWWW"); },    2, DefaultTProfileFactory },
+    { "cWWW_O2vS",  "O_{2}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cWWW) [GeV^{4}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_1_1_ocWWW"); },    2, DefaultTProfileFactory },
 
-    { "cW_O1vS",    "O_{1}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cW) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_2_ocW"); },      DefaultTProfileFactory },
-    { "cW_O2vS",    "O_{2}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cW) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_2_2_ocW"); },      DefaultTProfileFactory },
+    { "cW_O1vS",    "O_{1}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cW) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_2_ocW"); },      2, DefaultTProfileFactory },
+    { "cW_O2vS",    "O_{2}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cW) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_2_2_ocW"); },      2, DefaultTProfileFactory },
 
-    { "cB_O1vS",    "O_{1}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cB) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_3_ocB"); },      DefaultTProfileFactory },
-    { "cB_O2vS",    "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_3_3_ocB"); },      DefaultTProfileFactory },
+    { "cB_O1vS",    "O_{1}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cB) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_3_ocB"); },      2, DefaultTProfileFactory },
+    { "cB_O2vS",    "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_3_3_ocB"); },      2, DefaultTProfileFactory },
 
     //
 
-    { "cWWW_O1dSvS",    "O_{1}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cWWW)/s",             GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_1_ocWWW", 1); },    DefaultTProfileFactory },
-//  { "cWWW_O2dSvS",    "O_{2}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s [GeV^{2}]",   GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 1); },    DefaultTProfileFactory },
-    { "cWWW_O2dS2vS",   "O_{2}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s^{2}",         GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 2); },    DefaultTProfileFactory },
+    { "cWWW_O1dSvS",    "O_{1}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cWWW)/s",             GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_1_ocWWW", 1); },    2, DefaultTProfileFactory },
+//  { "cWWW_O2dSvS",    "O_{2}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s [GeV^{2}]",   GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 1); },    2, DefaultTProfileFactory },
+    { "cWWW_O2dS2vS",   "O_{2}(cWWW)",  100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s^{2}",         GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 2); },    2, DefaultTProfileFactory },
 
-    { "cW_O1dSvS",      "O_{1}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cW)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_2_ocW",   1); },    DefaultTProfileFactory },
-//  { "cW_O2dSvS",      "O_{2}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   1); },    DefaultTProfileFactory },
-    { "cW_O2dS2vS",     "O_{2}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   2); },    DefaultTProfileFactory },
+    { "cW_O1dSvS",      "O_{1}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cW)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_2_ocW",   1); },    2, DefaultTProfileFactory },
+//  { "cW_O2dSvS",      "O_{2}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   1); },    2, DefaultTProfileFactory },
+    { "cW_O2dS2vS",     "O_{2}(cW)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   2); },    2, DefaultTProfileFactory },
 
-    { "cB_O1dSvS",      "O_{1}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    DefaultTProfileFactory },
-//  { "cB_O2dSvS",      "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    DefaultTProfileFactory },
-    { "cB_O2dS2vS",     "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    DefaultTProfileFactory },
+    { "cB_O1dSvS",      "O_{1}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    2, DefaultTProfileFactory },
+//  { "cB_O2dSvS",      "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    2, DefaultTProfileFactory },
+    { "cB_O2dS2vS",     "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    2, DefaultTProfileFactory },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -95,28 +95,28 @@ static const ModelCompare::ObservableVector Observables2 =
 
 //  { "s",          "#sqrt{s}",     1500, 0, 3000,  "#sqrt{s} [GeV]", "Events per bin",             GETOBS{ GetObs(s,v,c, GetObsSqrtS); } },  // same as M(WZ)
 
-    { "cWWW_O1vS",  "O_{1}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cWWW) [GeV^{2}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_1_ocWWW"); },    DefaultTProfileFactory },
-    { "cWWW_O2vS",  "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW) [GeV^{4}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_1_1_ocWWW"); },    DefaultTProfileFactory },
+    { "cWWW_O1vS",  "O_{1}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cWWW) [GeV^{2}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_1_ocWWW"); },    2, DefaultTProfileFactory },
+    { "cWWW_O2vS",  "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW) [GeV^{4}]", GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_1_1_ocWWW"); },    2, DefaultTProfileFactory },
 
-    { "cW_O1vS",    "O_{1}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cW) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_2_ocW"); },      DefaultTProfileFactory },
-    { "cW_O2vS",    "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_2_2_ocW"); },      DefaultTProfileFactory },
+    { "cW_O1vS",    "O_{1}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cW) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_2_ocW"); },      2, DefaultTProfileFactory },
+    { "cW_O2vS",    "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_2_2_ocW"); },      2, DefaultTProfileFactory },
 
-    { "cB_O1vS",    "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_3_ocB"); },      DefaultTProfileFactory },
-    { "cB_O2vS",    "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_3_3_ocB"); },      DefaultTProfileFactory },
+    { "cB_O1vS",    "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB) [GeV^{2}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_0_3_ocB"); },      2, DefaultTProfileFactory },
+    { "cB_O2vS",    "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB) [GeV^{4}]",   GETOBS{ GetObsOpt_vs_sqrtS(s,v,c, "F_3_3_ocB"); },      2, DefaultTProfileFactory },
 
     //
 
-    { "cWWW_O1dSvS",    "O_{1}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cWWW)/s",             GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_1_ocWWW", 1); },    DefaultTProfileFactory },
-//  { "cWWW_O2dSvS",    "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s [GeV^{2}]",   GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 1); },    DefaultTProfileFactory },
-    { "cWWW_O2dS2vS",   "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s^{2}",         GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 2); },    DefaultTProfileFactory },
+    { "cWWW_O1dSvS",    "O_{1}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cWWW)/s",             GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_1_ocWWW", 1); },    2, DefaultTProfileFactory },
+//  { "cWWW_O2dSvS",    "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s [GeV^{2}]",   GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 1); },    2, DefaultTProfileFactory },
+    { "cWWW_O2dS2vS",   "O_{2}(cWWW)",  1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cWWW)/s^{2}",         GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_1_1_ocWWW", 2); },    2, DefaultTProfileFactory },
 
-    { "cW_O1dSvS",      "O_{1}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cW)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_2_ocW",   1); },    DefaultTProfileFactory },
-//  { "cW_O2dSvS",      "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   1); },    DefaultTProfileFactory },
-    { "cW_O2dS2vS",     "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   2); },    DefaultTProfileFactory },
+    { "cW_O1dSvS",      "O_{1}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cW)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_2_ocW",   1); },    2, DefaultTProfileFactory },
+//  { "cW_O2dSvS",      "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   1); },    2, DefaultTProfileFactory },
+    { "cW_O2dS2vS",     "O_{2}(cW)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cW)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_2_2_ocW",   2); },    2, DefaultTProfileFactory },
 
-    { "cB_O1dSvS",      "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    DefaultTProfileFactory },
-//  { "cB_O2dSvS",      "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    DefaultTProfileFactory },
-    { "cB_O2dS2vS",     "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    DefaultTProfileFactory },
+    { "cB_O1dSvS",      "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    2, DefaultTProfileFactory },
+//  { "cB_O2dSvS",      "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    2, DefaultTProfileFactory },
+    { "cB_O2dS2vS",     "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    2, DefaultTProfileFactory },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
