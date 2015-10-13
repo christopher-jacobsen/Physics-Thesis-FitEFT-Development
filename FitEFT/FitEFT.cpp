@@ -22,6 +22,7 @@
 #include <TVirtualFitter.h>
 #include <TBackCompFitter.h>
 #include <Math/Minimizer.h>
+#include <Math/MinimizerOptions.h>
 
 using namespace RootUtil;
 
@@ -258,7 +259,10 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
             fitFunc.FixParameter( i, fitParam[i].initValue / scale );
     }
 
+    //
     // setup fit options
+    //
+
     // do not use M - it produces too many warnings of:
     // "FUNCTION VALUE DOES NOT SEEM TO DEPEND ON ANY OF THE 1 VARIABLE PARAMETERS. VERIFY THAT STEP SIZES ARE BIG ENOUGH AND CHECK FCN LOGIC."
 
@@ -275,11 +279,21 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
         fitOption2 += " L";
     }
 
-    TFitResultPtr fitStatus;
+    //
+    // Setup minimizer options
+    //
+
+    // increase error definition to 2 sigma
+    // error definition: the objective function delta that determines parameter error results
+    // default is 1 sigma - likelihood: 0.5  chi^2: 1.0
+    // both have quadratic dependence, so 2 sigma is 4 times the 1 sigma error definition
+    ROOT::Math::MinimizerOptions::SetDefaultErrorDef( bLogLike ? 2 : 4 );
 
     //
     // first fit with limits
     //
+
+    TFitResultPtr fitStatus;
 
     fitStatus = fitData.Fit( &fitFunc, fitOption1.c_str() );
     if ((int)fitStatus != 0)
