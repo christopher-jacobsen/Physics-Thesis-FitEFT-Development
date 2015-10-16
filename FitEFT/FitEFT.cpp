@@ -430,7 +430,8 @@ private:
 FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
                      const TH1D & target, const FitParamVector & fitParam,
                      const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
-                     int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+                     int fitIndex = -1,         // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+                     bool bShapeOnly = false )  // if true normalize event count of the model data to same as the target data
 {
     const Double_t  xMin  = target.GetXaxis()->GetXmin();
     const Double_t  xMax  = target.GetXaxis()->GetXmax();
@@ -479,12 +480,16 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     FitData fitData( target );
 
+    bool bLogLike = fitData.IsHist();
+
     //
     // setup fit model function
     //
 
+    const double normalization = !(bShapeOnly && bLogLike) ? 0.0 : target.Integral(); // ReweightPDFFunc::ExtendedIntegral(target);
+
     ReweightPDFFunc modelFunc(  fitParam, coefNames, source, sourceCoefs, sourceEval,
-                                xMin, xMax );
+                                xMin, xMax, normalization );
 
     TF1 fitFunc( "EFT", &modelFunc, xMin, xMax, nPar );
 
@@ -518,7 +523,6 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // use log-likelihood for TH1D but not TProfile
     // Note: do not use "WL" as it does something weird
 
-    bool bLogLike = fitData.IsHist();
     if (bLogLike)
     {
         fitOption1 += " L";
