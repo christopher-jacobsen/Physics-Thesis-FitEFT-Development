@@ -10,6 +10,8 @@
 #include "RootUtil.h"
 
 // Root includes
+#include <TMinuitMinimizer.h>
+
 #include <TFile.h>
 #include <TH1.h>
 #include <TProfile.h>
@@ -30,6 +32,48 @@ using namespace RootUtil;
 ////////////////////////////////////////////////////////////////////////////////
 namespace FitEFT
 {
+
+////////////////////////////////////////////////////////////////////////////////
+
+static const ROOT::Math::MinimizerOptions StartupMinimizerOptions;
+
+void RestoreDefaultMinimizerOptions()
+{
+    using namespace ROOT::Math;
+
+    const MinimizerOptions & opt = StartupMinimizerOptions;
+
+    MinimizerOptions::SetDefaultMinimizer(        opt.MinimizerType()     .c_str(),
+                                                  opt.MinimizerAlgorithm().c_str() );
+    MinimizerOptions::SetDefaultErrorDef(         opt.ErrorDef()         );
+    MinimizerOptions::SetDefaultTolerance(        opt.Tolerance()        );
+    MinimizerOptions::SetDefaultPrecision(        opt.Precision()        );
+    MinimizerOptions::SetDefaultMaxFunctionCalls( opt.MaxFunctionCalls() );
+    MinimizerOptions::SetDefaultMaxIterations(    opt.MaxIterations()    );
+    MinimizerOptions::SetDefaultStrategy(         opt.Strategy()         );
+    MinimizerOptions::SetDefaultPrintLevel(       opt.PrintLevel()       );
+    MinimizerOptions::SetDefaultExtraOptions(     opt.ExtraOptions()     );
+
+    //MinimizerOptions test;
+    //test.Print();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void ClearLastFitter()
+{
+    TVirtualFitter * pLastFitter = TVirtualFitter::GetFitter();  // get the global last fitter
+    if (pLastFitter)
+    {
+        // the destructor of TVirtualFitter clears the global last fitter
+        // if the object deleted is also the global fitter
+
+        delete pLastFitter;
+
+        pLastFitter = TVirtualFitter::GetFitter();
+        if (pLastFitter)
+            ThrowError( "Failed to clear last fitter." );
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = true )
@@ -100,7 +144,8 @@ struct FitResult
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-FitResult ConstructFitResult( const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex, const char * objectiveTitle )
+FitResult ConstructFitResult( const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
+                              const char * namePrefix, const char * objectiveTitle )
 {
     FitResult result;
 
@@ -158,7 +203,7 @@ FitResult ConstructFitResult( const TFitResult & fitStatus, const ModelCompare::
                 // success
                 pGraph->Set( (Int_t)nStep );  // resize to actual steps
 
-                std::string sName  = ((fitIndex < 0) ? "min_all_"  : "min_one_") + std::string(obs.name)  + "_" + std::string(resultParam.name);
+                std::string sName  = std::string(namePrefix) + ((fitIndex < 0) ? "_min_all_"  : "_min_one_") + std::string(obs.name)  + "_" + std::string(resultParam.name);
                 std::string sTitle = std::string(obs.title) + ": fit min. for " + std::string(resultParam.name) + ((fitIndex < 0) ? " (all)" : " (one)");
 
                 pGraph->SetName(  sName .c_str() );
@@ -179,18 +224,32 @@ FitResult ConstructFitResult( const TFitResult & fitStatus, const ModelCompare::
 class ReweightPDFFunc
 {
 public:
-    ReweightPDFFunc( const CStringVector & coefNames,
-                     const FitParamVector & fitParam,
-                     const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval )
+    typedef std::function<void(const double * par)> TestFunction;
+
+    ReweightPDFFunc(    const FitParamVector & fitParam,
+                        const CStringVector & coefNames,
+                        const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
+                        double xMin, double xMax,       // used to limit the function to this region
+                        double normalization   = 0.0,   // normalizes the reweighted histogram to this value (0.0 skips normalization)
+                        double scale           = 1.0,   // F(x) = scale * (content(x))^power
+                        double power           = 1.0    // F(x) = scale * (content(x))^power
+                    )
     :
-        m_nPar(        fitParam.size()  ),
-        m_coefNames(   coefNames        ),
-        m_source(      source           ),
-        m_sourceCoefs( sourceCoefs      ),
-        m_sourceEval(  sourceEval       ),
-        m_lastPar(     fitParam.size()  ),
-        m_targetParam( fitParam.size()  )
+        m_nPar(         fitParam.size()     ),
+        m_coefNames(    coefNames           ),
+        m_source(       source              ),
+        m_sourceCoefs(  sourceCoefs         ),
+        m_sourceEval(   sourceEval          ),
+        m_lastPar(      fitParam.size()     ),
+        m_targetParam(  fitParam.size()     ),
+        m_xMin(         xMin                ),
+        m_xMax(         xMax                ),
+        m_norm(         normalization       ),
+        m_scale(        scale               ),
+        m_power(        power               )
     {
+        m_bProfile = source.InheritsFrom(TProfile::Class());
+
         for (Int_t i = 0; i < m_nPar; ++i)
         {
             m_targetParam[i].name  = fitParam[i].name;
@@ -198,13 +257,33 @@ public:
         }
     }
 
+    void EnableThrowOnReject( bool enable )
+    {
+        m_bThrowOnReject = enable;
+    }
+
+    // set optional TestFunction that is called after a new histogram has been constructed
+    void SetTestFunction( const TestFunction & func )
+    {
+        m_testFunc = func;
+    }
+
+
     Double_t operator()( const Double_t * x, const Double_t * par )
     {
         if (!m_upLastSourceReweight ||
             (memcmp( m_lastPar.data(), par, m_nPar * sizeof(*par)) != 0))
         {
+            memcpy( m_lastPar.data(), par, m_nPar * sizeof(*par) );
+
+            std::string sPar;
             for (Int_t i = 0; i < m_nPar; ++i)
+            {
                 m_targetParam[i].value = par[i];
+
+                if (!sPar.empty()) sPar += ", ";
+                sPar += StringFormat( "%g", FMT_F(par[i]) );
+            }
 
             std::vector<double> targetEval;
             CalcEvalVector( m_coefNames, m_targetParam, targetEval );
@@ -213,7 +292,27 @@ public:
                 ReweightEFT::ReweightHist( m_source, m_sourceCoefs, m_sourceEval, targetEval,
                                            "RWFitHist", "RWFitHist" ) );
 
-            memcpy( m_lastPar.data(), par, m_nPar * sizeof(*par) );
+            double integral         = m_upLastSourceReweight->Integral();
+            double integralExt      = ExtendedIntegral( *m_upLastSourceReweight );
+            double integralAfter    = integral;
+            double integralExtAfter = integralExt;
+
+            if ((m_norm != 0.0) && !m_bProfile)
+            {
+                double scale = m_norm / integral;
+                m_upLastSourceReweight->Scale( scale );
+
+                integralAfter    = m_upLastSourceReweight->Integral();
+                integralExtAfter = ExtendedIntegral( *m_upLastSourceReweight );
+            }
+
+            //LogMsgInfo( m_norm == 0.0 ? "RWPDFFunc(%hs) integral=%g (%g)" :
+            //                            "RWPDFFunc(%hs) integral=%g (%g) -> %g (%g)",
+            //            FMT_HS(sPar.c_str()), FMT_F(integral), FMT_F(integralExt),
+            //            FMT_F(integralAfter), FMT_F(integralExtAfter) );
+
+            if (m_testFunc)
+                m_testFunc( par );
         }
 
         const TH1D * pHist = m_upLastSourceReweight.get();
@@ -225,17 +324,36 @@ public:
 
         //LogMsgInfo( "x=%f b=%i n=%f c=%f", FMT_F(xVal), FMT_I(bin), FMT_F(nEff), FMT_F(content) );
 
-        // reduce NDF
-        if (nEff <= 0)
+        if ((xVal < m_xMin) || (xVal > m_xMax))
         {
-            // LogMsgInfo( ">>>> Rejecting bin %i <<<<", bin );
-            ++m_rejectCount;
-            TF1::RejectPoint();
+            RejectPoint(xVal);
             return 0;
         }
 
+        if ((bin < 1) || (bin > pHist->GetSize() - 2))
+        {
+            RejectPoint(xVal);
+            return 0;
+        }
+
+        if (nEff <= 0)
+        {
+            RejectBin(bin);
+            return 0;
+        }
+
+        if ((m_power != 1.0) && (m_power != 0.0))
+            content = pow( content, m_power );
+
+        if ((m_scale != 1.0) && (m_scale != 0.0))
+            content *= m_scale;
+
+        if ((content <= 0.0) && !m_bProfile)
+            LogMsgWarning( "RWPDFFunc returning %g", FMT_F(content) );
+
         return content;
     }
+
 
     void Reset()
     {
@@ -245,17 +363,60 @@ public:
 
     size_t RejectCount() const { return m_rejectCount; }
 
+    static double ExtendedIntegral( const TH1D & hist )
+    {
+        double total = 0.0;
+
+        const Int_t nSize = hist.GetSize();
+        for (Int_t bin = 0; bin < nSize; ++bin)
+        {
+            total += hist.GetBinContent(bin);
+        }
+
+        return total;
+    }
+
+private:
+    void RejectPoint(double x)
+    {
+        if (m_bThrowOnReject)
+            ThrowError( "RWPDFFunc rejecting x=%f", FMT_F(x) );
+
+        LogMsgInfo( "RWPDFFunc rejecting x=%f", FMT_F(x) );
+        ++m_rejectCount;
+        TF1::RejectPoint();
+    }
+
+    void RejectBin(int bin)
+    {
+        if (m_bThrowOnReject)
+            ThrowError( "RWPDFFunc rejecting bin %i", FMT_I(bin) );
+
+        LogMsgInfo( "RWPDFFunc rejecting bin %i", FMT_I(bin) );
+        ++m_rejectCount;
+        TF1::RejectPoint();
+    }
+
 private:
     const size_t                    m_nPar;
     const CStringVector &           m_coefNames;
     const TH1D &                    m_source;
     const ConstTH1DVector &         m_sourceCoefs;
     const std::vector<double> &     m_sourceEval;
+    const double                    m_xMin              = -std::numeric_limits<double>::max();
+    const double                    m_xMax              =  std::numeric_limits<double>::max();
+    const double                    m_norm              = 0.0;
+    const double                    m_scale             = 1.0;
+    const double                    m_power             = 1.0;
+    bool                            m_bProfile          = false;
 
     std::vector<Double_t>           m_lastPar;
     ReweightEFT::ParamVector        m_targetParam;
-    ConstTH1DUniquePtr              m_upLastSourceReweight;
-    size_t                          m_rejectCount               = 0;
+    TH1DUniquePtr                   m_upLastSourceReweight;
+    size_t                          m_rejectCount       = 0;
+    bool                            m_bThrowOnReject    = false;
+
+    std::function<void(const double * par)> m_testFunc  = nullptr;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -264,9 +425,9 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
                      const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
                      int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
 {
-    const Double_t  xmin  = target.GetXaxis()->GetXmin();
-    const Double_t  xmax  = target.GetXaxis()->GetXmax();
-    const Int_t     npar  = (Int_t)fitParam.size();
+    const Double_t  xMin  = target.GetXaxis()->GetXmin();
+    const Double_t  xMax  = target.GetXaxis()->GetXmax();
+    const Int_t     nPar  = (Int_t)fitParam.size();
 
     //
     // Construct fit data
@@ -315,11 +476,12 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // setup fit model function
     //
 
-    ReweightPDFFunc modelFunc( coefNames, fitParam, source, sourceCoefs, sourceEval );
+    ReweightPDFFunc modelFunc(  fitParam, coefNames, source, sourceCoefs, sourceEval,
+                                xMin, xMax );
 
-    TF1 fitFunc( "EFT", &modelFunc, xmin, xmax, npar );
+    TF1 fitFunc( "EFT", &modelFunc, xMin, xMax, nPar );
 
-    for (Int_t i = 0; i < npar; ++i)
+    for (Int_t i = 0; i < nPar; ++i)
     {
         fitFunc.SetParName(   i, fitParam[i].name );
         fitFunc.SetParameter( i, fitParam[i].initValue );
@@ -343,7 +505,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // do not use M - it produces too many warnings of:
     // "FUNCTION VALUE DOES NOT SEEM TO DEPEND ON ANY OF THE 1 VARIABLE PARAMETERS. VERIFY THAT STEP SIZES ARE BIG ENOUGH AND CHECK FCN LOGIC."
 
-    std::string fitOption1 = "N Q";
+    std::string fitOption1 = "N S Q";
     std::string fitOption2 = "N S E";  // E=hesse error (invert error matrix) and run minos errors
 
     // use log-likelihood for TH1D but not TProfile
@@ -360,6 +522,8 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // Setup minimizer options
     //
 
+    RestoreDefaultMinimizerOptions();
+
     // increase error definition to 2 sigma
     // error definition: the objective function delta that determines parameter error results
     // default is 1 sigma - likelihood: 0.5  chi^2: 1.0
@@ -370,11 +534,16 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     // first fit with limits
     //
 
+    // clear last fitter to ensure no previous fit results will affect this fit
+    // should not be necessary, but paranoia avoids issues
+    ClearLastFitter();
+
     TFitResultPtr fitStatus;
 
     fitStatus = fitData.Fit( &fitFunc, fitOption1.c_str() );
     if ((int)fitStatus != 0)
     {
+        fitStatus->Print();
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
             return FitResult( (int)fitStatus );
     }
@@ -386,7 +555,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     //
 
     // remove parameter limits on non-fixed parameters
-    for (Int_t i = 0; i < npar; ++i)
+    for (Int_t i = 0; i < nPar; ++i)
     {
         if ((fitIndex < 0) || (i == fitIndex))
             fitFunc.ReleaseParameter(i);
@@ -399,6 +568,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     fitStatus = fitData.Fit( &fitFunc, fitOption2.c_str() );
     if ((int)fitStatus != 0)
     {
+        fitStatus->Print();
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))   // ignore improve (M) errors
             return FitResult( (int)fitStatus );
     }
@@ -445,7 +615,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     // fill in result
 
-    FitResult result = ConstructFitResult( *fitStatus, obs, fitParam, fitIndex, bLogLike ? "Log likelihood" : "#chi^{2}" );
+    FitResult result = ConstructFitResult( *fitStatus, obs, fitParam, fitIndex, "binned", bLogLike ? "Log likelihood" : "#chi^{2}" );
 
     // cross-check chi2
     {
@@ -693,6 +863,10 @@ void FitEFT( const char * outputFileName,
     TH1::AddDirectory(kFALSE);
     // enable automatic sumw2 for every histogram
     TH1::SetDefaultSumw2(kTRUE);
+
+    // disable reusing the same minuit object
+    // this fixes the observed behavior/bug where a fit affected subsequent fits
+    TMinuitMinimizer::UseStaticMinuit(false);
 
     // ------
 
