@@ -1139,6 +1139,10 @@ void FitEFT( const char * outputFileName,
     LogMsgInfo( "Log output file: %hs", FMT_HS(logFileName.c_str()) );
     FILE * fpLog = fopen( logFileName.c_str(), "wt" );
 
+    // calculate luminosity scales
+
+    double targetScale = luminosity * targetFile.crossSection * 1000 / targetFile.crossSectionEvents;
+
     // load input trees
 
     TupleVector targetTrees;    // targetTrees[observable]
@@ -1201,8 +1205,8 @@ void FitEFT( const char * outputFileName,
 
     // fit each source hist to the target, varying only one parameter
 
-    typedef std::pair<const char *, int>            NameIndexPair;
-    typedef std::map< NameIndexPair, FitResult >    FitResultMap;
+    typedef std::tuple<const char *, bool, int>     FitIdent;           // obsName, binned, fitIndex
+    typedef std::map< FitIdent, FitResult >         FitResultMap;
 
     FitResultMap results;
 
@@ -1211,6 +1215,7 @@ void FitEFT( const char * outputFileName,
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
     {
         const ModelCompare::Observable &    obs         = observables[obsIndex];
+        const TNtupleD *                    pTargetTree = targetTrees[obsIndex];
         const TH1D *                        pTargetHist = targetHists[obsIndex];
         const TH1D &                        source      = *sourceHists[obsIndex];
         const ConstTH1DVector               srcCoefs    = ToConstTH1DVector(sourceCoefs[obsIndex]);
@@ -1228,10 +1233,28 @@ void FitEFT( const char * outputFileName,
 
         for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
         {
+            if (pTargetTree)
+            {
+                WriteLog( fpLog, "\n------------------------------------------------------------" );
+                WriteLog( fpLog, "Fitting unbinned %hs to parameter %hs",
+                                    FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
+                LogMsgInfo( "------------------------------------------------------------" );
+
+                FitResult fitResult = UnBinFitEFTObs( obs, coefNames, fitParam, *pTargetTree, targetScale,
+                                                      source, srcCoefs, sourceEval, fitIndex );
+
+                if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
+                    ++fitFail;
+
+                //exit(1);
+
+                results[ FitIdent(obs.name,false,fitIndex) ] = std::move(fitResult);
+            }
+
             if (pTargetHist)
             {
                 WriteLog( fpLog, "\n------------------------------------------------------------" );
-                WriteLog( fpLog, "Fitting %hs to parameter %hs",
+                WriteLog( fpLog, "Fitting binned %hs to parameter %hs",
                                     FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
                 LogMsgInfo( "------------------------------------------------------------" );
 
@@ -1245,14 +1268,30 @@ void FitEFT( const char * outputFileName,
                 CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
                                      source, srcCoefs, sourceEval );
 
-            results[ NameIndexPair(obs.name,fitIndex) ] = std::move(fitResult);
+                results[ FitIdent(obs.name,true,fitIndex) ] = std::move(fitResult);
             }
+        }
+
+        if (pTargetTree)
+        {
+            WriteLog( fpLog, "\n------------------------------------------------------------" );
+            WriteLog( fpLog, "Fitting unbinned %hs to all parameters",
+                                FMT_HS(obs.name) );
+            LogMsgInfo( "------------------------------------------------------------" );
+
+            FitResult fitResult = UnBinFitEFTObs( obs, coefNames, fitParam, *pTargetTree, targetScale,
+                                                  source, srcCoefs, sourceEval, -1 );
+
+            if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
+                ++fitFail;
+
+            results[ FitIdent(obs.name,false,-1) ] = std::move(fitResult);
         }
 
         if (pTargetHist)
         {
             WriteLog( fpLog, "\n------------------------------------------------------------" );
-            WriteLog( fpLog, "Fitting %hs to all parameters",
+            WriteLog( fpLog, "Fitting binned %hs to all parameters",
                                 FMT_HS(obs.name) );
             LogMsgInfo( "------------------------------------------------------------") ;
 
@@ -1266,7 +1305,7 @@ void FitEFT( const char * outputFileName,
             CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
                                  source, srcCoefs, sourceEval );
 
-        results[ NameIndexPair(obs.name,-1) ] = std::move(fitResult);
+            results[ FitIdent(obs.name,true,-1) ] = std::move(fitResult);
         }
     }
 
@@ -1285,12 +1324,16 @@ void FitEFT( const char * outputFileName,
         {
             const ModelCompare::Observable & obs = observables[obsIndex];
 
+            for (size_t binnedFlag = 0; binnedFlag <= 1; ++binnedFlag)
+            {
+                bool bBinned = !!binnedFlag;
+
                 // find fit of one parameter
 
                 const FitResult *        pFitOne = nullptr;
                 const FitResult::Param * pParOne = nullptr;
                 {
-                    auto itrRes = results.find( NameIndexPair(obs.name,fitIndex) );
+                    auto itrRes = results.find( FitIdent(obs.name,bBinned,fitIndex) );
                     if (itrRes != results.end())
                     {
                         pFitOne = &itrRes->second;
@@ -1306,7 +1349,7 @@ void FitEFT( const char * outputFileName,
                 const FitResult *        pFitAll = nullptr;
                 const FitResult::Param * pParAll = nullptr;
                 {
-                    auto itrRes = results.find( NameIndexPair(obs.name,-1) );
+                    auto itrRes = results.find( FitIdent(obs.name,bBinned,-1) );
                     if (itrRes != results.end())
                     {
                         pFitAll = &itrRes->second;
@@ -1344,7 +1387,7 @@ void FitEFT( const char * outputFileName,
                     sParOne = StringFormat( "%8.2g | %6.2g %16hs | %6.2g",
                                             FMT_F(pParOne->value*1E6), FMT_F(pParOne->error*1E6),
                                             FMT_HS(minosOne.c_str()),
-                                            FMT_F(pFitOne->chi2_ndf) );
+                                            FMT_F(bBinned ? pFitOne->chi2_ndf : -1.0) );
                 }
                 else
                 {
@@ -1358,15 +1401,15 @@ void FitEFT( const char * outputFileName,
                     sParAll = StringFormat( "%8.2g | %6.2g %16hs | %6.2g",
                                             FMT_F(pParAll->value*1E6), FMT_F(pParAll->error*1E6),
                                             FMT_HS(minosAll.c_str()),
-                                            FMT_F(pFitAll->chi2_ndf) );
+                                            FMT_F(bBinned ? pFitAll->chi2_ndf : -1.0) );
                 }
                 else
                 {
                     sParAll = StringFormat( "%8hs | %-23hs | %6hs", "", "Failed", "" );
                 }
 
-                WriteLog( fpLog, "%12hs: %45s || %45s",
-                          FMT_HS(obs.name),
+                WriteLog( fpLog, "%C %12hs: %45s || %45s",
+                          FMT_HC(bBinned ? 'B' : 'U'), FMT_HS(obs.name),
                           FMT_HS(sParOne.c_str()), FMT_HS(sParAll.c_str()) );
             }
         }
