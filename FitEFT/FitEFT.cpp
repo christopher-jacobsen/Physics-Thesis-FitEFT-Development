@@ -27,6 +27,13 @@
 #include <Math/Minimizer.h>
 #include <Math/MinimizerOptions.h>
 
+#include <HFitInterface.h>
+#include <Fit/UnBinData.h>
+#include <Foption.h>
+
+#include <Fit/FitUtil.h>
+#include <Math/WrappedMultiTF1.h>
+
 using namespace RootUtil;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -625,6 +632,248 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     }
 
     LogMsgHistBinCounts( target );
+
+    LogMsgInfo( "" );  // empty line
+
+    return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames, const FitParamVector & fitParam,
+                          const TNtupleD & target, double targetScale,
+                          const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
+                          int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+{
+    /*
+    static int count = 0;
+
+    if (count++ >= 8)
+        return FitResult();
+    */
+
+    const Double_t  xMin  = source.GetXaxis()->GetXmin();
+    const Double_t  xMax  = source.GetXaxis()->GetXmax();
+    const Int_t     nPar  = (Int_t)fitParam.size();
+
+    //
+    // setup fit model function
+    //
+
+    TF1 * pFitFunc = nullptr;
+
+    /*
+    std::unique_ptr<ROOT::Fit::UnBinData> upTestData = nullptr;
+
+    auto testFunc = [&](const double * par) -> void
+    {
+        auto func = ROOT::Math::WrappedMultiTF1(*pFitFunc, 1);
+
+        unsigned int nPoints(0);
+        double logL = ROOT::Fit::FitUtil::EvaluateLogL( func, *upTestData, par, 0, false, nPoints );
+
+
+        const ROOT::Fit::UnBinData & test = *upTestData;
+
+        size_t skipped = 0;
+        double myLogL = 0;
+        unsigned int n = test.Size();
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            const double * x = test.Coords(i);
+            double f = func( x, par );
+            if (f <= 0.0)
+            {
+                ++skipped;
+                continue;
+            }
+            myLogL += ROOT::Math::Util::EvalLog(f);
+        }
+        myLogL = -myLogL;
+
+        if (logL == myLogL)
+            LogMsgInfo( "LogL = %.15e (skipped=%u)\n", FMT_F(logL), FMT_U(skipped) );
+        else
+            LogMsgInfo( "LogL = %.15e myLogL = %.15e (skipped=%u)\n", FMT_F(logL), FMT_F(myLogL), FMT_U(skipped) );
+
+    };
+    */
+
+    // Create model function
+    //
+    // For negative log-likelihood, the scale and power parameters passed to
+    // the ReweightPDFFunc constructor affect the objective as so:
+    //   FCN = power * -log(content) - log(scale)
+    //
+    // The PDF must be normalized to some constant for the fit to function, unless
+    // one performs an extended log-likelhood fit (fitOption.Like = 1).
+    // An extended log-likelihood fit adds a Poisson term, that adds the integral
+    // of the PDF (in the range) to the result. See FitUtil.cxx, EvaluateLogL().
+    // This adds whatever we normalize to, addng 1 to the result.
+
+    ReweightPDFFunc modelFunc(  fitParam, coefNames, source, sourceCoefs, sourceEval, xMin, xMax,
+                                1.0,            // normalize PDF to 1.0 (required for unbinned fits)
+                                1.0,            // default scale
+                                //1.0           // default power
+                                targetScale     // multiply log-likelood by targetScale
+                              );
+
+    //modelFunc.SetTestFunction( testFunc );
+
+    pFitFunc = new TF1( "EFT_unbinned", &modelFunc, xMin, xMax, nPar );
+    TF1 & fitFunc = *pFitFunc;
+
+    for (Int_t i = 0; i < nPar; ++i)
+    {
+        fitFunc.SetParName(   i, fitParam[i].name );
+        fitFunc.SetParameter( i, fitParam[i].initValue );
+
+        if ((fitIndex >= 0) && (i != fitIndex))
+        {
+            fitFunc.FixParameter( i, fitParam[i].initValue );
+            fitFunc.SetParError(  i, 0.0 );
+        }
+        else
+        {
+            fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
+            //fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 1E6 ); // set initial step (helps fit converge)
+        }
+    }
+
+    //
+    // Construct fit data
+    //
+
+    std::vector<double> data;
+    {
+        std::unique_ptr<TNtupleD> upRead( (TNtupleD *)target.Clone() );
+
+        Long64_t nEntries = upRead->GetEntries();
+
+        data.reserve( (size_t)nEntries );
+
+        //upTestData.reset( new ROOT::Fit::UnBinData( (unsigned int)nEntries ) );
+
+        for (Long64_t entry = 0; entry < nEntries; ++entry)
+        {
+          //upRead->LoadTree(entry);    // non-const
+            upRead->GetEntry(entry);    // non-const
+
+            Double_t value = *upRead->GetArgs();
+
+            if ((value < xMin) || !(value < xMax))
+                continue;
+
+            // omit points rejected by our fit function
+            TF1::RejectPoint(false);
+            fitFunc( &value ); // evaluate using stored function parameters
+            if (TF1::RejectedPoint())
+                continue;
+
+            data.push_back( value );
+
+            //upTestData->Add( value );
+        }
+    }
+
+    //
+    // setup fit options
+    //
+
+    Foption_t fitOption;
+    {
+        //fitOption.More          = 1;
+        fitOption.StoreResult   = 1;
+        fitOption.Nograph       = 1;
+        fitOption.Verbose       = 1;
+      //fitOption.Errors        = 1;
+      //fitOption.Like          = 1;  // 1 = extended (adds Poisson term). Requires range to be set in the unbinned data object.
+    }
+
+    //
+    // Setup minimizer options
+    //
+
+    RestoreDefaultMinimizerOptions();
+
+    ROOT::Math::MinimizerOptions minOption;
+    {
+        // for likelihood: 1 sigma = 0.5*1^2 = 0.5, 2 sigma = 0.5*2^2 = 2
+        minOption.SetErrorDef( 2.0 );
+        //minOption.SetErrorDef( 2.0 / targetScale );
+
+        // converge when EDM < 0.001 * Tolerance
+        // default: Tolerance = 0.1
+        minOption.SetTolerance( 1000 );
+
+        //minOption.SetPrecision( std::numeric_limits<double>::min() );
+        //minOption.SetPrecision( std::numeric_limits<double>::epsilon() );
+        //minOption.SetPrecision( 1E-100 );
+
+        minOption.SetStrategy(2);
+    }
+
+    //
+    // first fit with limits
+    //
+
+    // enable throw on reject to check that our PDF always has a value for every unbinned data point
+    // unsupported data points should have been removed above as the unbinned data was constructed
+    modelFunc.EnableThrowOnReject(true);
+
+    // clear last fitter to ensure no previous fit results will affect this fit
+    // should not be necessary, but paranoia avoids issues
+    ClearLastFitter();
+
+    ROOT::Fit::DataRange range( xMin, xMax );
+
+    ROOT::Fit::UnBinData *  pFitData = nullptr;
+    TFitResultPtr           fitStatus;
+
+    pFitData  = new ROOT::Fit::UnBinData( (unsigned int)data.size(), data.data(), range ); // copies data
+    
+    fitStatus = ROOT::Fit::UnBinFit( pFitData, &fitFunc, fitOption, minOption );    // TVirtualFitter::GetFitter() takes ownership of pFitData
+    if ((int)fitStatus != 0)
+    {
+        fitStatus->Print();
+        if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
+            return FitResult( (int)fitStatus );
+    }
+
+    /*
+    //
+    // second fit with no limits
+    //
+
+    // remove parameter limits on non-fixed parameters
+    for (Int_t i = 0; i < nPar; ++i)
+    {
+        if ((fitIndex < 0) || (i == fitIndex))
+            fitFunc.ReleaseParameter(i);
+    }
+
+    modelFunc.Reset();
+
+    // re-run fit using result from previous fit as initial values
+    // including parameter errors that are used to setup fit steps
+
+    pFitData  = new ROOT::Fit::UnBinData( (unsigned int)data.size(), data.data(), range ); // copies data
+    
+    fitStatus = ROOT::Fit::UnBinFit( pFitData, &fitFunc, fitOption, minOption );    // TVirtualFitter::GetFitter() takes ownership of pFitData
+    if ((int)fitStatus != 0)
+    {
+        fitStatus->Print();
+        if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
+            return FitResult( (int)fitStatus );
+    }
+    */
+
+//    fitStatus->Print();
+
+    LogMsgInfo( "\nReject Count: %u", FMT_U(modelFunc.RejectCount()) );
+
+    // fill in result
+
+    FitResult result = ConstructFitResult( *fitStatus, obs, fitParam, fitIndex, "Unbinned", "Log likelihood" );
 
     LogMsgInfo( "" );  // empty line
 
