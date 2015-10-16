@@ -1211,7 +1211,7 @@ void FitEFT( const char * outputFileName,
     for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
     {
         const ModelCompare::Observable &    obs         = observables[obsIndex];
-        const TH1D *                        pFitTarget  = targetHists[obsIndex];
+        const TH1D *                        pTargetHist = targetHists[obsIndex];
         const TH1D &                        source      = *sourceHists[obsIndex];
         const ConstTH1DVector               srcCoefs    = ToConstTH1DVector(sourceCoefs[obsIndex]);
 
@@ -1219,54 +1219,58 @@ void FitEFT( const char * outputFileName,
 
         WriteLog( fpLog, "\n******************** %hs ********************", FMT_HS(obs.name) );
 
-        if (pFitTarget->InheritsFrom(TProfile::Class()))
+        if (pTargetHist->InheritsFrom(TProfile::Class()))
         {
-            goodBad = ModelCompare::HistSplitGoodBadBins( pFitTarget,         rawtargetHists[obsIndex] );
+            goodBad = ModelCompare::HistSplitGoodBadBins( pTargetHist,        rawtargetHists[obsIndex] );
             goodBad = ModelCompare::HistSplitGoodBadBins( goodBad.good.get(), rawsourceHists[obsIndex] );
-            pFitTarget = goodBad.good.get();
+            pTargetHist = goodBad.good.get();
         }
 
         for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
         {
-            WriteLog( fpLog, "\n------------------------------------------------------------" );
-            WriteLog( fpLog, "Fitting %hs to parameter %hs",
-                                FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
-            LogMsgInfo( "------------------------------------------------------------" );
+            if (pTargetHist)
+            {
+                WriteLog( fpLog, "\n------------------------------------------------------------" );
+                WriteLog( fpLog, "Fitting %hs to parameter %hs",
+                                    FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
+                LogMsgInfo( "------------------------------------------------------------" );
 
-            FitResult fitResult = FitEFTObs( obs, coefNames, *pFitTarget, fitParam,
-                                             source, srcCoefs, sourceEval,
-                                             fitIndex );
+                FitResult fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
+                                                 source, srcCoefs, sourceEval, fitIndex );
+
+                if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
+                    ++fitFail;
+
+                // cross-check
+                CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
+                                     source, srcCoefs, sourceEval );
+
+            results[ NameIndexPair(obs.name,fitIndex) ] = std::move(fitResult);
+            }
+        }
+
+        if (pTargetHist)
+        {
+            WriteLog( fpLog, "\n------------------------------------------------------------" );
+            WriteLog( fpLog, "Fitting %hs to all parameters",
+                                FMT_HS(obs.name) );
+            LogMsgInfo( "------------------------------------------------------------") ;
+
+            FitResult fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
+                                             source, srcCoefs, sourceEval, -1 );
 
             if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
                 ++fitFail;
 
             // cross-check
-            CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
+            CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
                                  source, srcCoefs, sourceEval );
 
-            results[ NameIndexPair(obs.name,fitIndex) ] = std::move(fitResult);
-        }
-
-        WriteLog( fpLog, "\n------------------------------------------------------------" );
-        WriteLog( fpLog, "Fitting %hs to all parameters",
-                            FMT_HS(obs.name) );
-        LogMsgInfo( "------------------------------------------------------------") ;
-
-        FitResult fitResult = FitEFTObs( obs, coefNames, *pFitTarget, fitParam,
-                                         source, srcCoefs, sourceEval,
-                                         -1 );
-
-        if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
-            ++fitFail;
-
-        // cross-check
-        CrossCheckFitResult( coefNames, fitResult, fitParam, *pFitTarget,
-                             source, srcCoefs, sourceEval );
-
         results[ NameIndexPair(obs.name,-1) ] = std::move(fitResult);
-
-        // TODO: make figures from fit result
+        }
     }
+
+    // TODO: make figures from fit result
 
     WriteLog( fpLog, "\nSUMMARY" );
 
@@ -1281,61 +1285,90 @@ void FitEFT( const char * outputFileName,
         {
             const ModelCompare::Observable & obs = observables[obsIndex];
 
-            auto itrRes = results.find( NameIndexPair(obs.name,fitIndex) );
-            if (itrRes == results.end())
-                continue;
+                // find fit of one parameter
 
-            const FitResult & fitOne = itrRes->second;
+                const FitResult *        pFitOne = nullptr;
+                const FitResult::Param * pParOne = nullptr;
+                {
+                    auto itrRes = results.find( NameIndexPair(obs.name,fitIndex) );
+                    if (itrRes != results.end())
+                    {
+                        pFitOne = &itrRes->second;
 
-            itrRes = results.find( NameIndexPair(obs.name,-1) );
-            if (itrRes == results.end())
-                continue;
+                        auto itrPar = std::find_if( pFitOne->param.cbegin(), pFitOne->param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
+                        if (itrPar != pFitOne->param.cend())
+                            pParOne = &*itrPar;
+                    }
+                }
 
-            const FitResult & fitAll = itrRes->second;
+                // find fit of all parameters
 
-            auto itrPar = std::find_if( fitOne.param.cbegin(), fitOne.param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
-            if (itrPar == fitOne.param.cend())
-                continue;
+                const FitResult *        pFitAll = nullptr;
+                const FitResult::Param * pParAll = nullptr;
+                {
+                    auto itrRes = results.find( NameIndexPair(obs.name,-1) );
+                    if (itrRes != results.end())
+                    {
+                        pFitAll = &itrRes->second;
 
-            const FitResult::Param & parOne = *itrPar;
+                        auto itrPar = std::find_if( pFitAll->param.cbegin(), pFitAll->param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
+                        if (itrPar != pFitAll->param.cend())
+                            pParAll = &*itrPar;
+                    }
+                }
 
-            itrPar = std::find_if( fitAll.param.cbegin(), fitAll.param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
-            if (itrPar == fitAll.param.cend())
-                continue;
+                if (!pParOne && !pParAll)
+                    continue;
 
-            const FitResult::Param & parAll = *itrPar;
+                auto GetMinos = [](const FitResult::Param & par, double scale = 1E6) -> std::string
+                {
+                    double err = par.error         * scale;
+                    double lwr = par.minosError[0] * scale;
+                    double upr = par.minosError[1] * scale;
 
-            auto GetMinos = [](const FitResult::Param & par, double scale = 1E6) -> std::string
-            {
-                double err = par.error         * scale;
-                double lwr = par.minosError[0] * scale;
-                double upr = par.minosError[1] * scale;
+                    if ((lwr == 0.0) && (upr == 0.0)) return std::string();
 
-                if ((lwr == 0.0) && (upr == 0.0)) return std::string();
+                    std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
+                    std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
+                    std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
 
-                std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
-                std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
-                std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
+                    if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
 
-                if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
+                    return StringFormat( "(%.2g, %.2g)", FMT_F(lwr), FMT_F(upr) );
+                };
 
-                return StringFormat( "(%.2g, %.2g)", FMT_F(lwr), FMT_F(upr) );
-            };
+                std::string sParOne;
+                if (pParOne)
+                {
+                    std::string minosOne = GetMinos(*pParOne);
+                    sParOne = StringFormat( "%8.2g | %6.2g %16hs | %6.2g",
+                                            FMT_F(pParOne->value*1E6), FMT_F(pParOne->error*1E6),
+                                            FMT_HS(minosOne.c_str()),
+                                            FMT_F(pFitOne->chi2_ndf) );
+                }
+                else
+                {
+                    sParOne = StringFormat( "%8hs | %-23hs | %6hs", "", "Failed", "" );
+                }
 
-            std::string minosOne = GetMinos(parOne);
-            std::string minosAll = GetMinos(parAll);
+                std::string sParAll;
+                if (pParAll)
+                {
+                    std::string minosAll = GetMinos(*pParAll);
+                    sParAll = StringFormat( "%8.2g | %6.2g %16hs | %6.2g",
+                                            FMT_F(pParAll->value*1E6), FMT_F(pParAll->error*1E6),
+                                            FMT_HS(minosAll.c_str()),
+                                            FMT_F(pFitAll->chi2_ndf) );
+                }
+                else
+                {
+                    sParAll = StringFormat( "%8hs | %-23hs | %6hs", "", "Failed", "" );
+                }
 
-            WriteLog( fpLog, "%12hs: %8.2g | %6.2g %16hs | %6.2g || %8.2g | %6.2g %16hs | %6.2g"
-
-                           //"    || %.15E | %.15E | %.15E | %.15E"
-
-                        , FMT_HS(obs.name)
-                        , FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6), FMT_HS(minosOne.c_str()), FMT_F(fitOne.chi2_ndf)
-                        , FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6), FMT_HS(minosAll.c_str()), FMT_F(fitAll.chi2_ndf)
-
-                      //, FMT_F(parOne.value*1E6), FMT_F(parOne.error*1E6)
-                      //, FMT_F(parAll.value*1E6), FMT_F(parAll.error*1E6)
-                    );
+                WriteLog( fpLog, "%12hs: %45s || %45s",
+                          FMT_HS(obs.name),
+                          FMT_HS(sParOne.c_str()), FMT_HS(sParAll.c_str()) );
+            }
         }
     }
 
