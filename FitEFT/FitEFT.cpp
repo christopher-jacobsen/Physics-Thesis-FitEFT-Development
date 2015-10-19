@@ -78,6 +78,30 @@ struct FitResult
         : kind(kind), status(status)
     {
     }
+
+    static const char * Name( Kind kind )
+    {
+        switch (kind)
+        {
+            default :
+            case Kind::Undefined        : return "undefined";   break;
+            case Kind::Binned           : return "binned";      break;
+            case Kind::Binned_ShapeOnly : return "binshape";    break;
+            case Kind::Unbinned         : return "unbinned";    break;
+        }
+    }
+
+    static const char * Title( Kind kind )
+    {
+        switch (kind)
+        {
+            default :
+            case Kind::Undefined        : return "undefined";               break;
+            case Kind::Binned           : return "binned";                  break;
+            case Kind::Binned_ShapeOnly : return "binned (shape-only)";     break;
+            case Kind::Unbinned         : return "unbinned";                break;
+        }
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -170,7 +194,7 @@ static TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = t
 
 ////////////////////////////////////////////////////////////////////////////////
 static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
-                                     const char * namePrefix, const char * objectiveTitle )
+                                     const char * objectiveTitle )
 {
     FitResult result(fitKind);
 
@@ -228,7 +252,7 @@ static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult &
                 // success
                 pGraph->Set( (Int_t)nStep );  // resize to actual steps
 
-                std::string sName  = std::string(namePrefix) + ((fitIndex < 0) ? "_min_all_"  : "_min_one_") + std::string(obs.name)  + "_" + std::string(resultParam.name);
+                std::string sName  = std::string(FitResult::Name(fitKind)) + ((fitIndex < 0) ? "_min_all_"  : "_min_one_") + std::string(obs.name)  + "_" + std::string(resultParam.name);
                 std::string sTitle = std::string(obs.title) + ": fit min. for " + std::string(resultParam.name) + ((fitIndex < 0) ? " (all)" : " (one)");
 
                 pGraph->SetName(  sName .c_str() );
@@ -646,7 +670,7 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
 
     // fill in result
 
-    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, "binned", bLogLike ? "Log likelihood" : "#chi^{2}" );
+    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, bLogLike ? "Log likelihood" : "#chi^{2}" );
 
     // cross-check chi2
     {
@@ -899,7 +923,7 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
 
     // fill in result
 
-    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, "Unbinned", "Log likelihood" );
+    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, "Log likelihood" );
 
     LogMsgInfo( "" );  // empty line
 
@@ -1247,12 +1271,17 @@ static bool DoFit(  FILE * fpLog,
                     int                                 fitIndex,
                     FitResult &                         fitResult )
 {
-    const char * pszKind = nullptr;
     switch (fitKind)
     {
-        case FitResult::Kind::Binned           : { if (!pTargetHist) return false; pszKind = "binned";                break; }
-        case FitResult::Kind::Binned_ShapeOnly : { if (!pTargetHist) return false; pszKind = "binned (shape-only)";   break; }
-        case FitResult::Kind::Unbinned         : { if (!pTargetTree) return false; pszKind = "unbinned";              break; }
+        case FitResult::Kind::Binned           :
+        case FitResult::Kind::Binned_ShapeOnly :
+            if (!pTargetHist) return false;
+            break;
+
+        case FitResult::Kind::Unbinned :
+            if (!pTargetTree) return false;
+            break;
+
         default :
             return false;
     }
@@ -1260,7 +1289,7 @@ static bool DoFit(  FILE * fpLog,
     std::string sParam = (fitIndex < 0) ? "all parameters" : StringFormat( "parameter %hs", FMT_HS(fitParam[fitIndex].name) );
 
     WriteLog( fpLog, "\n------------------------------------------------------------" );
-    WriteLog( fpLog, "Fitting %hs %hs to %hs", FMT_HS(pszKind), FMT_HS(obs.name), FMT_HS(sParam.c_str()) );
+    WriteLog( fpLog, "Fitting %hs %hs to %hs", FMT_HS(FitResult::Title(fitKind)), FMT_HS(obs.name), FMT_HS(sParam.c_str()) );
     LogMsgInfo( "------------------------------------------------------------" );
 
     switch (fitKind)
@@ -1414,7 +1443,7 @@ void FitEFT( const char * outputFileName,
         fitIndexes.push_back(-1);
     }
 
-    std::vector<FitResult::Kind> fitKinds = { FitResult::Kind::Unbinned, FitResult::Kind::Binned };
+    std::vector<FitResult::Kind> fitKinds = { FitResult::Kind::Binned, FitResult::Kind::Binned_ShapeOnly, FitResult::Kind::Unbinned };
 
     FitResultMap results;
 
