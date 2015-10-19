@@ -42,9 +42,54 @@ namespace FitEFT
 
 ////////////////////////////////////////////////////////////////////////////////
 
+struct FitResult
+{
+    enum class Kind
+    {
+        Undefined,
+        Binned,
+        Binned_ShapeOnly,
+        Unbinned
+    };
+
+    struct Param
+    {
+        const char *    name            = nullptr;
+        double          value           = 0;
+        double          error           = 0;
+        double          minosError[2]   = { };
+
+        std::unique_ptr<TGraph> upMinScan;
+    };
+
+    typedef std::vector<Param> ParamVector;
+
+    Kind            kind        = Kind::Undefined;
+    int             status      = 0;
+    double          chi2        = 0;
+    int             ndf         = 0;
+    double          prob        = 0;
+    double          chi2_ndf    = 0;
+    ParamVector     param;
+
+    FitResult() = default;
+
+    explicit FitResult( Kind kind, int status = 0 )
+        : kind(kind), status(status)
+    {
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+typedef std::tuple<const char *, FitResult::Kind, int>  FitIdent;           // obsName, kind, fitIndex
+typedef std::map< FitIdent, FitResult >                 FitResultMap;
+
+////////////////////////////////////////////////////////////////////////////////
+
 static const ROOT::Math::MinimizerOptions StartupMinimizerOptions;
 
-void RestoreDefaultMinimizerOptions()
+static void RestoreDefaultMinimizerOptions()
 {
     using namespace ROOT::Math;
 
@@ -66,7 +111,7 @@ void RestoreDefaultMinimizerOptions()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void ClearLastFitter()
+static void ClearLastFitter()
 {
     TVirtualFitter * pLastFitter = TVirtualFitter::GetFitter();  // get the global last fitter
     if (pLastFitter)
@@ -83,7 +128,7 @@ void ClearLastFitter()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = true )
+static TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = true )
 {
     const Int_t nBins = profile.GetNbinsX();
 
@@ -124,37 +169,10 @@ TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = true )
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-struct FitResult
+static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
+                                     const char * namePrefix, const char * objectiveTitle )
 {
-    struct Param
-    {
-        const char *    name            = nullptr;
-        double          value           = 0;
-        double          error           = 0;
-        double          minosError[2]   = { };
-
-        std::unique_ptr<TGraph> upMinScan;
-    };
-
-    typedef std::vector<Param> ParamVector;
-
-    int             status      = 0;
-    double          chi2        = 0;
-    int             ndf         = 0;
-    double          prob        = 0;
-    double          chi2_ndf    = 0;
-    ParamVector     param;
-
-    FitResult() = default;
-    FitResult(int status) : status(status) {}
-};
-
-////////////////////////////////////////////////////////////////////////////////
-FitResult ConstructFitResult( const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
-                              const char * namePrefix, const char * objectiveTitle )
-{
-    FitResult result;
+    FitResult result(fitKind);
 
     result.chi2     = fitStatus.Chi2();
     result.ndf      = fitStatus.Ndf();
@@ -427,12 +445,14 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
-                     const TH1D & target, const FitParamVector & fitParam,
-                     const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
-                     int fitIndex = -1,         // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
-                     bool bShapeOnly = false )  // if true normalize event count of the model data to same as the target data
+static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
+                            const TH1D & target, const FitParamVector & fitParam,
+                            const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
+                            int fitIndex = -1,         // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+                            bool bShapeOnly = false )  // if true normalize event count of the model data to same as the target data
 {
+    const FitResult::Kind fitKind = bShapeOnly ? FitResult::Kind::Binned_ShapeOnly : FitResult::Kind::Binned;
+
     const Double_t  xMin  = target.GetXaxis()->GetXmin();
     const Double_t  xMax  = target.GetXaxis()->GetXmax();
     const Int_t     nPar  = (Int_t)fitParam.size();
@@ -556,7 +576,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     {
         fitStatus->Print();
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
-            return FitResult( (int)fitStatus );
+            return FitResult( fitKind, (int)fitStatus );
     }
 
     //LogMsgInfo( "-*-*-*-*-*-" );
@@ -581,7 +601,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
     {
         fitStatus->Print();
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))   // ignore improve (M) errors
-            return FitResult( (int)fitStatus );
+            return FitResult( fitKind, (int)fitStatus );
     }
 
     /*
@@ -626,7 +646,7 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 
     // fill in result
 
-    FitResult result = ConstructFitResult( *fitStatus, obs, fitParam, fitIndex, "binned", bLogLike ? "Log likelihood" : "#chi^{2}" );
+    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, "binned", bLogLike ? "Log likelihood" : "#chi^{2}" );
 
     // cross-check chi2
     {
@@ -643,10 +663,10 @@ FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector &
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames, const FitParamVector & fitParam,
-                          const TNtupleD & target, double targetScale,
-                          const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
-                          int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames, const FitParamVector & fitParam,
+                                 const TNtupleD & target, double targetScale,
+                                 const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
+                                 int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
 {
     /*
     static int count = 0;
@@ -654,6 +674,8 @@ FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVec
     if (count++ >= 8)
         return FitResult();
     */
+
+    const FitResult::Kind fitKind = FitResult::Kind::Unbinned;
 
     const Double_t  xMin  = source.GetXaxis()->GetXmin();
     const Double_t  xMax  = source.GetXaxis()->GetXmax();
@@ -840,7 +862,7 @@ FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVec
     {
         fitStatus->Print();
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
-            return FitResult( (int)fitStatus );
+            return FitResult( fitKind, (int)fitStatus );
     }
 
     /*
@@ -877,7 +899,7 @@ FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVec
 
     // fill in result
 
-    FitResult result = ConstructFitResult( *fitStatus, obs, fitParam, fitIndex, "Unbinned", "Log likelihood" );
+    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, "Unbinned", "Log likelihood" );
 
     LogMsgInfo( "" );  // empty line
 
@@ -1104,6 +1126,182 @@ static bool WriteFitResult( FILE * fpLog, const FitResult & result, TFile * pFig
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector & observables, const FitParamVector & fitParam,
+                             const std::vector<FitResult::Kind> & fitKinds,
+                             const FitResultMap & results )
+{
+    WriteLog( fpLog, "\nSUMMARY" );
+
+    // Write summary
+    for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
+    {
+        const FitParam & fpar = fitParam[fitIndex];
+
+        WriteLog( fpLog, "\n---------- %hs ----------", FMT_HS(fpar.name) );
+
+        for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
+        {
+            const ModelCompare::Observable & obs = observables[obsIndex];
+
+            for (FitResult::Kind fitKind : fitKinds)
+            {
+                // find fit of one parameter
+
+                const FitResult *        pFitOne = nullptr;
+                const FitResult::Param * pParOne = nullptr;
+                {
+                    auto itrRes = results.find( FitIdent(obs.name,fitKind,fitIndex) );
+                    if (itrRes != results.end())
+                    {
+                        pFitOne = &itrRes->second;
+
+                        auto itrPar = std::find_if( pFitOne->param.cbegin(), pFitOne->param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
+                        if (itrPar != pFitOne->param.cend())
+                            pParOne = &*itrPar;
+                    }
+                }
+
+                // find fit of all parameters
+
+                const FitResult *        pFitAll = nullptr;
+                const FitResult::Param * pParAll = nullptr;
+                {
+                    auto itrRes = results.find( FitIdent(obs.name,fitKind,-1) );
+                    if (itrRes != results.end())
+                    {
+                        pFitAll = &itrRes->second;
+
+                        auto itrPar = std::find_if( pFitAll->param.cbegin(), pFitAll->param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
+                        if (itrPar != pFitAll->param.cend())
+                            pParAll = &*itrPar;
+                    }
+                }
+
+                // skip if fit not run
+                if (!pFitOne && !pFitAll)
+                    continue;
+
+                auto GetResult = [](const FitResult::Param * pPar, const FitResult * pRes, double scale = 1E6) -> std::string
+                {
+                    auto GetMinos = [](const FitResult::Param & par, double scale) -> std::string
+                    {
+                        double err = par.error         * scale;
+                        double lwr = par.minosError[0] * scale;
+                        double upr = par.minosError[1] * scale;
+
+                        if ((lwr == 0.0) && (upr == 0.0)) return std::string();
+
+                        std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
+                        std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
+                        std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
+
+                        if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
+
+                        return StringFormat( "(%+.2g,%+.2g)", FMT_F(lwr), FMT_F(upr) );
+                    };
+
+                    if (!pPar)
+                        return StringFormat( "%8hs | %-28hs | %6hs", "", "Failed", "" );
+
+                    std::string sMinos  = GetMinos( *pPar, scale );
+                    std::string sChi2   = (!pRes || pRes->chi2_ndf < 0.0) ? "" : StringFormat( "%6.2g", FMT_F(pRes->chi2_ndf) );
+
+                    return StringFormat( "%8.2g | %8.2g %19hs | %6hs",
+                                         FMT_F(pPar->value*scale), FMT_F(pPar->error*scale),
+                                         FMT_HS(sMinos.c_str()), FMT_HS(sChi2.c_str()) );
+                };
+
+                std::string sParOne = GetResult( pParOne, pFitOne );
+                std::string sParAll = GetResult( pParAll, pFitAll );
+
+                char fitID;
+                switch (fitKind)
+                {
+                    case FitResult::Kind::Unbinned          : fitID = 'U'; break;
+                    case FitResult::Kind::Binned            : fitID = 'B'; break;
+                    case FitResult::Kind::Binned_ShapeOnly  : fitID = 'S'; break;
+                    default                                 : fitID = '?'; break;
+                }
+
+                WriteLog( fpLog, "%C %12hs: %48s || %48s",
+                          FMT_HC(fitID), FMT_HS(obs.name),
+                          FMT_HS(sParOne.c_str()), FMT_HS(sParAll.c_str()) );
+            }
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+static bool DoFit(  FILE * fpLog,
+                    const ModelCompare::Observable &    obs,
+                    const CStringVector &               coefNames,
+                    const FitParamVector &              fitParam,
+                    const TNtupleD *                    pTargetTree,
+                    const TH1D *                        pTargetHist,
+                    double                              targetScale,
+                    const TH1D &                        source,
+                    const ConstTH1DVector               srcCoefs,
+                    const std::vector<double>  &        sourceEval,
+                    FitResult::Kind                     fitKind,
+                    int                                 fitIndex,
+                    FitResult &                         fitResult )
+{
+    const char * pszKind = nullptr;
+    switch (fitKind)
+    {
+        case FitResult::Kind::Binned           : { if (!pTargetHist) return false; pszKind = "binned";                break; }
+        case FitResult::Kind::Binned_ShapeOnly : { if (!pTargetHist) return false; pszKind = "binned (shape-only)";   break; }
+        case FitResult::Kind::Unbinned         : { if (!pTargetTree) return false; pszKind = "unbinned";              break; }
+        default :
+            return false;
+    }
+
+    std::string sParam = (fitIndex < 0) ? "all parameters" : StringFormat( "parameter %hs", FMT_HS(fitParam[fitIndex].name) );
+
+    WriteLog( fpLog, "\n------------------------------------------------------------" );
+    WriteLog( fpLog, "Fitting %hs %hs to %hs", FMT_HS(pszKind), FMT_HS(obs.name), FMT_HS(sParam.c_str()) );
+    LogMsgInfo( "------------------------------------------------------------" );
+
+    switch (fitKind)
+    {
+        case FitResult::Kind::Binned :
+        case FitResult::Kind::Binned_ShapeOnly :
+        {
+            bool bShapeOnly = fitKind == FitResult::Kind::Binned_ShapeOnly;
+
+            fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
+                                   source, srcCoefs, sourceEval,
+                                   fitIndex, bShapeOnly );
+
+            // cross-check
+            CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
+                                 source, srcCoefs, sourceEval );
+
+            break;
+        }
+
+        case FitResult::Kind::Unbinned :
+        {
+            if (source.InheritsFrom(TProfile::Class()))
+                return false;
+
+            fitResult = UnBinFitEFTObs( obs, coefNames, fitParam,
+                                        *pTargetTree, targetScale,
+                                        source, srcCoefs, sourceEval,
+                                        fitIndex );
+
+            break;
+        }
+
+        default:
+            return false;
+    }
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 void FitEFT( const char * outputFileName,
              const ModelCompare::ObservableVector & observables,
              const CStringVector & coefNames,
@@ -1209,8 +1407,14 @@ void FitEFT( const char * outputFileName,
 
     // fit each source hist to the target, varying only one parameter
 
-    typedef std::tuple<const char *, bool, int>     FitIdent;           // obsName, binned, fitIndex
-    typedef std::map< FitIdent, FitResult >         FitResultMap;
+    std::vector<int> fitIndexes(fitParam.size());
+    {
+        for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
+            fitIndexes[fitIndex] = fitIndex;
+        fitIndexes.push_back(-1);
+    }
+
+    std::vector<FitResult::Kind> fitKinds = { FitResult::Kind::Unbinned, FitResult::Kind::Binned };
 
     FitResultMap results;
 
@@ -1226,7 +1430,7 @@ void FitEFT( const char * outputFileName,
 
         ModelCompare::GoodBadHists goodBad;
 
-        WriteLog( fpLog, "\n******************** %hs ********************", FMT_HS(obs.name) );
+        WriteLog( fpLog, "\n\n******************** %hs ********************", FMT_HS(obs.name) );
 
         if (pTargetHist->InheritsFrom(TProfile::Class()))
         {
@@ -1235,179 +1439,31 @@ void FitEFT( const char * outputFileName,
             pTargetHist = goodBad.good.get();
         }
 
-        for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
+        for ( FitResult::Kind fitKind : fitKinds)
         {
-            if (pTargetTree)
+            for (int fitIndex : fitIndexes)
             {
-                WriteLog( fpLog, "\n------------------------------------------------------------" );
-                WriteLog( fpLog, "Fitting unbinned %hs to parameter %hs",
-                                    FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
-                LogMsgInfo( "------------------------------------------------------------" );
+                FitResult fitResult;
 
-                FitResult fitResult = UnBinFitEFTObs( obs, coefNames, fitParam, *pTargetTree, targetScale,
-                                                      source, srcCoefs, sourceEval, fitIndex );
+                if (!DoFit( fpLog, obs, coefNames, fitParam, pTargetTree, pTargetHist, targetScale,
+                            source, srcCoefs, sourceEval, fitKind, fitIndex, fitResult ))
+                {
+                    continue;
+                }
 
                 if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
+                {
                     ++fitFail;
+                }
 
-                //exit(1);
-
-                results[ FitIdent(obs.name,false,fitIndex) ] = std::move(fitResult);
+                results[ FitIdent(obs.name,fitResult.kind,fitIndex) ] = std::move(fitResult);
             }
-
-            if (pTargetHist)
-            {
-                WriteLog( fpLog, "\n------------------------------------------------------------" );
-                WriteLog( fpLog, "Fitting binned %hs to parameter %hs",
-                                    FMT_HS(obs.name), FMT_HS(fitParam[fitIndex].name) );
-                LogMsgInfo( "------------------------------------------------------------" );
-
-                FitResult fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
-                                                 source, srcCoefs, sourceEval, fitIndex );
-
-                if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
-                    ++fitFail;
-
-                // cross-check
-                CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
-                                     source, srcCoefs, sourceEval );
-
-                results[ FitIdent(obs.name,true,fitIndex) ] = std::move(fitResult);
-            }
-        }
-
-        if (pTargetTree)
-        {
-            WriteLog( fpLog, "\n------------------------------------------------------------" );
-            WriteLog( fpLog, "Fitting unbinned %hs to all parameters",
-                                FMT_HS(obs.name) );
-            LogMsgInfo( "------------------------------------------------------------" );
-
-            FitResult fitResult = UnBinFitEFTObs( obs, coefNames, fitParam, *pTargetTree, targetScale,
-                                                  source, srcCoefs, sourceEval, -1 );
-
-            if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
-                ++fitFail;
-
-            results[ FitIdent(obs.name,false,-1) ] = std::move(fitResult);
-        }
-
-        if (pTargetHist)
-        {
-            WriteLog( fpLog, "\n------------------------------------------------------------" );
-            WriteLog( fpLog, "Fitting binned %hs to all parameters",
-                                FMT_HS(obs.name) );
-            LogMsgInfo( "------------------------------------------------------------") ;
-
-            FitResult fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
-                                             source, srcCoefs, sourceEval, -1 );
-
-            if (!WriteFitResult( fpLog, fitResult, upOutputFile.get() ))
-                ++fitFail;
-
-            // cross-check
-            CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
-                                 source, srcCoefs, sourceEval );
-
-            results[ FitIdent(obs.name,true,-1) ] = std::move(fitResult);
         }
     }
 
     // TODO: make figures from fit result
 
-    WriteLog( fpLog, "\nSUMMARY" );
-
-    // Write summary
-    for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
-    {
-        const FitParam & fpar = fitParam[fitIndex];
-
-        WriteLog( fpLog, "\n---------- %hs ----------", FMT_HS(fpar.name) );
-
-        for (size_t obsIndex = 0; obsIndex < observables.size(); ++obsIndex)
-        {
-            const ModelCompare::Observable & obs = observables[obsIndex];
-
-            bool bProfile = sourceHists[obsIndex]->InheritsFrom(TProfile::Class());
-
-            for (size_t binnedFlag = 0; binnedFlag <= 1; ++binnedFlag)
-            {
-                bool bBinned = !!binnedFlag;
-
-                if (bProfile && !bBinned)
-                    continue;
-
-                // find fit of one parameter
-
-                const FitResult *        pFitOne = nullptr;
-                const FitResult::Param * pParOne = nullptr;
-                {
-                    auto itrRes = results.find( FitIdent(obs.name,bBinned,fitIndex) );
-                    if (itrRes != results.end())
-                    {
-                        pFitOne = &itrRes->second;
-
-                        auto itrPar = std::find_if( pFitOne->param.cbegin(), pFitOne->param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
-                        if (itrPar != pFitOne->param.cend())
-                            pParOne = &*itrPar;
-                    }
-                }
-
-                // find fit of all parameters
-
-                const FitResult *        pFitAll = nullptr;
-                const FitResult::Param * pParAll = nullptr;
-                {
-                    auto itrRes = results.find( FitIdent(obs.name,bBinned,-1) );
-                    if (itrRes != results.end())
-                    {
-                        pFitAll = &itrRes->second;
-
-                        auto itrPar = std::find_if( pFitAll->param.cbegin(), pFitAll->param.cend(), [&](const FitResult::Param & p) { return strcmp(p.name, fpar.name) == 0; } );
-                        if (itrPar != pFitAll->param.cend())
-                            pParAll = &*itrPar;
-                    }
-                }
-
-                auto GetResult = [](const FitResult::Param * pPar, const FitResult * pRes, double scale = 1E6) -> std::string
-                {
-                    auto GetMinos = [](const FitResult::Param & par, double scale) -> std::string
-                    {
-                        double err = par.error         * scale;
-                        double lwr = par.minosError[0] * scale;
-                        double upr = par.minosError[1] * scale;
-
-                        if ((lwr == 0.0) && (upr == 0.0)) return std::string();
-
-                        std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
-                        std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
-                        std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
-
-                        if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
-
-                        return StringFormat( "(%+.2g,%+.2g)", FMT_F(lwr), FMT_F(upr) );
-                    };
-
-                    if (!pPar)
-                        return StringFormat( "%8hs | %-28hs | %6hs", "", "Failed", "" );
-
-                    std::string sMinos  = GetMinos( *pPar, scale );
-                    std::string sChi2   = (!pRes || pRes->chi2_ndf < 0.0) ? "" : StringFormat( "%6.2g", FMT_F(pRes->chi2_ndf) );
-
-                    return StringFormat( "%8.2g | %8.2g %19hs | %6hs",
-                                         FMT_F(pPar->value*scale), FMT_F(pPar->error*scale),
-                                         FMT_HS(sMinos.c_str()), FMT_HS(sChi2.c_str()) );
-                };
-
-                std::string sParOne = GetResult( pParOne, pFitOne );
-                std::string sParAll = GetResult( pParAll, pFitAll );
-
-                WriteLog( fpLog, "%C %12hs: %48s || %48s",
-                          FMT_HC(bBinned ? 'B' : 'U'), FMT_HS(obs.name),
-                          FMT_HS(sParOne.c_str()), FMT_HS(sParAll.c_str()) );
-            }
-        }
-    }
+    WriteFitSummary( fpLog, observables, fitParam, fitKinds, results );
 
     if (fitFail)
         WriteLog( fpLog, "\n!!! Error: %u fit(s) failed !!!", FMT_U(fitFail) );
