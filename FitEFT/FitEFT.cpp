@@ -1328,9 +1328,14 @@ void FitEFT( const char * outputFileName,
         {
             const ModelCompare::Observable & obs = observables[obsIndex];
 
+            bool bProfile = sourceHists[obsIndex]->InheritsFrom(TProfile::Class());
+
             for (size_t binnedFlag = 0; binnedFlag <= 1; ++binnedFlag)
             {
                 bool bBinned = !!binnedFlag;
+
+                if (bProfile && !bBinned)
+                    continue;
 
                 // find fit of one parameter
 
@@ -1364,55 +1369,40 @@ void FitEFT( const char * outputFileName,
                     }
                 }
 
-                if (!pParOne && !pParAll)
-                    continue;
-
-                auto GetMinos = [](const FitResult::Param & par, double scale = 1E6) -> std::string
+                auto GetResult = [](const FitResult::Param * pPar, const FitResult * pRes, double scale = 1E6) -> std::string
                 {
-                    double err = par.error         * scale;
-                    double lwr = par.minosError[0] * scale;
-                    double upr = par.minosError[1] * scale;
+                    auto GetMinos = [](const FitResult::Param & par, double scale) -> std::string
+                    {
+                        double err = par.error         * scale;
+                        double lwr = par.minosError[0] * scale;
+                        double upr = par.minosError[1] * scale;
 
-                    if ((lwr == 0.0) && (upr == 0.0)) return std::string();
+                        if ((lwr == 0.0) && (upr == 0.0)) return std::string();
 
-                    std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
-                    std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
-                    std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
+                        std::string sErr = StringFormat( "%.2g", FMT_F(err)  );
+                        std::string sLwr = StringFormat( "%.2g", FMT_F(-lwr) );
+                        std::string sUpr = StringFormat( "%.2g", FMT_F(upr)  );
 
-                    if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
+                        if ((sLwr == sErr) && (sUpr == sErr)) return std::string();
 
-                    return StringFormat( "(%.2g, %.2g)", FMT_F(lwr), FMT_F(upr) );
+                        return StringFormat( "(%+.2g,%+.2g)", FMT_F(lwr), FMT_F(upr) );
+                    };
+
+                    if (!pPar)
+                        return StringFormat( "%8hs | %-28hs | %6hs", "", "Failed", "" );
+
+                    std::string sMinos  = GetMinos( *pPar, scale );
+                    std::string sChi2   = (!pRes || pRes->chi2_ndf < 0.0) ? "" : StringFormat( "%6.2g", FMT_F(pRes->chi2_ndf) );
+
+                    return StringFormat( "%8.2g | %8.2g %19hs | %6hs",
+                                         FMT_F(pPar->value*scale), FMT_F(pPar->error*scale),
+                                         FMT_HS(sMinos.c_str()), FMT_HS(sChi2.c_str()) );
                 };
 
-                std::string sParOne;
-                if (pParOne)
-                {
-                    std::string minosOne = GetMinos(*pParOne);
-                    sParOne = StringFormat( "%8.2g | %6.2g %16hs | %6.2g",
-                                            FMT_F(pParOne->value*1E6), FMT_F(pParOne->error*1E6),
-                                            FMT_HS(minosOne.c_str()),
-                                            FMT_F(bBinned ? pFitOne->chi2_ndf : -1.0) );
-                }
-                else
-                {
-                    sParOne = StringFormat( "%8hs | %-23hs | %6hs", "", "Failed", "" );
-                }
+                std::string sParOne = GetResult( pParOne, pFitOne );
+                std::string sParAll = GetResult( pParAll, pFitAll );
 
-                std::string sParAll;
-                if (pParAll)
-                {
-                    std::string minosAll = GetMinos(*pParAll);
-                    sParAll = StringFormat( "%8.2g | %6.2g %16hs | %6.2g",
-                                            FMT_F(pParAll->value*1E6), FMT_F(pParAll->error*1E6),
-                                            FMT_HS(minosAll.c_str()),
-                                            FMT_F(bBinned ? pFitAll->chi2_ndf : -1.0) );
-                }
-                else
-                {
-                    sParAll = StringFormat( "%8hs | %-23hs | %6hs", "", "Failed", "" );
-                }
-
-                WriteLog( fpLog, "%C %12hs: %45s || %45s",
+                WriteLog( fpLog, "%C %12hs: %48s || %48s",
                           FMT_HC(bBinned ? 'B' : 'U'), FMT_HS(obs.name),
                           FMT_HS(sParOne.c_str()), FMT_HS(sParAll.c_str()) );
             }
