@@ -251,6 +251,7 @@
 					"-lRint",
 					"-lPostscript",
 					"-lMatrix",
+					"-lMinuit",
 					"-lPhysics",
 					"-lMathCore",
 					"-lThread",
@@ -327,6 +328,7 @@
 					"-lRint",
 					"-lPostscript",
 					"-lMatrix",
+					"-lMinuit",
 					"-lPhysics",
 					"-lMathCore",
 					"-lThread",
@@ -373,6 +375,7 @@
 				237B13631BB32D58001AD590 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
