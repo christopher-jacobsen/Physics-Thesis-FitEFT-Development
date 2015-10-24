@@ -194,7 +194,7 @@ static TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = t
 
 ////////////////////////////////////////////////////////////////////////////////
 static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
-                                     const char * objectiveTitle )
+                                     bool bCreateScanGraph, const char * objectiveTitle )
 {
     FitResult result(fitKind);
 
@@ -226,7 +226,7 @@ static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult &
         }
 
         // create a minimization scan
-        if (pMinimizer)
+        if (bCreateScanGraph && pMinimizer)
         {
             resultParam.upMinScan.reset( new TGraph( (Int_t)100 ) );
             TGraph * pGraph = resultParam.upMinScan.get();  // alias
@@ -234,6 +234,10 @@ static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult &
             // do +/- 2x error scan (default range)
             double scanMin = resultParam.value - 2 * resultParam.error;
             double scanMax = resultParam.value + 2 * resultParam.error;
+
+            // extend the range to +/- 1E-6
+            //scanMin = std::min( scanMin, -1E-6 );
+            //scanMax = std::max( scanMax,  1E-6 );
 
             // scan symmetric around 0.0 point
             scanMin = std::min( scanMin, -scanMax );
@@ -472,8 +476,9 @@ private:
 static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames,
                             const TH1D & target, const FitParamVector & fitParam,
                             const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
-                            int fitIndex = -1,         // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
-                            bool bShapeOnly = false )  // if true normalize event count of the model data to same as the target data
+                            int fitIndex            = -1,       // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+                            bool bShapeOnly         = false,    // if true normalize event count of the model data to same as the target data
+                            bool bCreateScanGraph   = false )   // create scan graphs around minimization point
 {
     const FitResult::Kind fitKind = bShapeOnly ? FitResult::Kind::Binned_ShapeOnly : FitResult::Kind::Binned;
 
@@ -550,7 +555,7 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
         else
         {
             fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
-            fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 1E6 ); // set initial step (helps fit converge)
+            fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 100 ); // set initial step (helps fit converge)
         }
     }
 
@@ -584,6 +589,10 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
     // default is 1 sigma - likelihood: 0.5  chi^2: 1.0
     // both have quadratic dependence, so 2 sigma is 4 times the 1 sigma error definition
     ROOT::Math::MinimizerOptions::SetDefaultErrorDef( bLogLike ? 2 : 4 );
+
+    //ROOT::Math::MinimizerOptions::SetDefaultTolerance( 0.1 );
+
+    ROOT::Math::MinimizerOptions::SetDefaultStrategy(2);
 
     //
     // first fit with limits
@@ -670,7 +679,7 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
 
     // fill in result
 
-    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, bLogLike ? "Log likelihood" : "#chi^{2}" );
+    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, bCreateScanGraph, bLogLike ? "Log likelihood" : "#chi^{2}" );
 
     // cross-check chi2
     {
@@ -690,7 +699,8 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
 static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CStringVector & coefNames, const FitParamVector & fitParam,
                                  const TNtupleD & target, double targetScale,
                                  const TH1D & source, const ConstTH1DVector & sourceCoefs, const std::vector<double> & sourceEval,
-                                 int fitIndex = -1 )   // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+                                 int fitIndex           = -1,       // -1 = fit all, otherwise index of fit parameter to fit, keeping all others fixed
+                                 bool bCreateScanGraph  = false )   // create scan graph around minimization point
 {
     /*
     static int count = 0;
@@ -784,8 +794,8 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
         }
         else
         {
-            fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
-            //fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 1E6 ); // set initial step (helps fit converge)
+            //fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
+            fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 100 ); // set initial step (helps fit converge)
         }
     }
 
@@ -825,17 +835,22 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
         }
     }
 
+    // enable throw on reject to check that our PDF always has a value for every unbinned data point
+    // unsupported data points should have been removed above as the unbinned data was constructed
+    modelFunc.EnableThrowOnReject(true);
+    modelFunc.Reset();
+
     //
     // setup fit options
     //
 
     Foption_t fitOption;
     {
-        //fitOption.More          = 1;
+      //fitOption.Verbose       = 1;
         fitOption.StoreResult   = 1;
         fitOption.Nograph       = 1;
-        fitOption.Verbose       = 1;
-      //fitOption.Errors        = 1;
+      //fitOption.More          = 1;  // improved result (expensive)
+      //fitOption.Errors        = 1;  // Hesse and Minos errors (expensive)
       //fitOption.Like          = 1;  // 1 = extended (adds Poisson term). Requires range to be set in the unbinned data object.
     }
 
@@ -853,7 +868,10 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
 
         // converge when EDM < 0.001 * Tolerance
         // default: Tolerance = 0.1
-        minOption.SetTolerance( 1000 );
+        // <= 10.0 some fits fail to converge
+        // 20.0 all succeed, but one limited by machine accuracy
+        // 25.0 all succeed, none limited by machine accuracy
+        minOption.SetTolerance( 25.0 );
 
         //minOption.SetPrecision( std::numeric_limits<double>::min() );
         //minOption.SetPrecision( std::numeric_limits<double>::epsilon() );
@@ -863,12 +881,8 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
     }
 
     //
-    // first fit with limits
+    // first fit with no limits
     //
-
-    // enable throw on reject to check that our PDF always has a value for every unbinned data point
-    // unsupported data points should have been removed above as the unbinned data was constructed
-    modelFunc.EnableThrowOnReject(true);
 
     // clear last fitter to ensure no previous fit results will affect this fit
     // should not be necessary, but paranoia avoids issues
@@ -913,17 +927,21 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
     {
         fitStatus->Print();
         if (((int)fitStatus < 0) || ((int)fitStatus % 1000 != 0))  // ignore improve (M) errors
-            return FitResult( (int)fitStatus );
+            return FitResult( fitKind, (int)fitStatus );
     }
     */
 
-//    fitStatus->Print();
+    fitStatus->Print();
 
-    LogMsgInfo( "\nReject Count: %u", FMT_U(modelFunc.RejectCount()) );
+    LogMsgInfo( "" );  // empty line
+
+    // reject count should be zero
+    if (modelFunc.RejectCount())
+        LogMsgError( "Reject Count: %u", FMT_U(modelFunc.RejectCount()) );
 
     // fill in result
 
-    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, "Log likelihood" );
+    FitResult result = ConstructFitResult( fitKind, *fitStatus, obs, fitParam, fitIndex, bCreateScanGraph, "Log likelihood" );
 
     LogMsgInfo( "" );  // empty line
 
@@ -1269,6 +1287,7 @@ static bool DoFit(  FILE * fpLog,
                     const std::vector<double>  &        sourceEval,
                     FitResult::Kind                     fitKind,
                     int                                 fitIndex,
+                    bool                                bCreateScanGraph,
                     FitResult &                         fitResult )
 {
     switch (fitKind)
@@ -1301,7 +1320,7 @@ static bool DoFit(  FILE * fpLog,
 
             fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
                                    source, srcCoefs, sourceEval,
-                                   fitIndex, bShapeOnly );
+                                   fitIndex, bShapeOnly, bCreateScanGraph );
 
             // cross-check
             CrossCheckFitResult( coefNames, fitResult, fitParam, *pTargetHist,
@@ -1318,7 +1337,8 @@ static bool DoFit(  FILE * fpLog,
             fitResult = UnBinFitEFTObs( obs, coefNames, fitParam,
                                         *pTargetTree, targetScale,
                                         source, srcCoefs, sourceEval,
-                                        fitIndex );
+                                        fitIndex,
+                                        bCreateScanGraph );
 
             break;
         }
@@ -1336,7 +1356,7 @@ void FitEFT( const char * outputFileName,
              const CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
              const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam,
-             double luminosity,
+             double luminosity, bool bCreateScanGraph,
              const char * cacheFileName )
 {
     // disable automatic histogram addition to current directory
@@ -1461,7 +1481,7 @@ void FitEFT( const char * outputFileName,
 
         WriteLog( fpLog, "\n\n******************** %hs ********************", FMT_HS(obs.name) );
 
-        if (pTargetHist->InheritsFrom(TProfile::Class()))
+        if (pTargetHist && pTargetHist->InheritsFrom(TProfile::Class()))
         {
             goodBad = ModelCompare::HistSplitGoodBadBins( pTargetHist,        rawtargetHists[obsIndex] );
             goodBad = ModelCompare::HistSplitGoodBadBins( goodBad.good.get(), rawsourceHists[obsIndex] );
@@ -1475,7 +1495,8 @@ void FitEFT( const char * outputFileName,
                 FitResult fitResult;
 
                 if (!DoFit( fpLog, obs, coefNames, fitParam, pTargetTree, pTargetHist, targetScale,
-                            source, srcCoefs, sourceEval, fitKind, fitIndex, fitResult ))
+                            source, srcCoefs, sourceEval, fitKind, fitIndex, bCreateScanGraph,
+                            fitResult ))
                 {
                     continue;
                 }

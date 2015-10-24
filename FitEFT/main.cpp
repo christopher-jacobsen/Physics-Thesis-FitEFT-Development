@@ -66,6 +66,7 @@ static const ModelCompare::ObservableVector Observables1 =
     { "cB_O1dSvS",      "O_{1}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    2, DefaultTProfileFactory },
 //  { "cB_O2dSvS",      "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    2, DefaultTProfileFactory },
     { "cB_O2dS2vS",     "O_{2}(cB)",    100, 0, 3000,   "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    2, DefaultTProfileFactory },
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -171,16 +172,16 @@ static const ReweightEFT::ParamVector Params_EFT_SM =
 
 static const FitEFT::FitParamVector FitParams_EFT_all =
 {
-    { "ocWWW", 3E-5, -1E-3, 1E-3 },
-    { "ocW",   5E-5, -1E-3, 1E-3 },
-    { "ocB",   9E-4, -1E-2, 1E-2 },
+    { "ocWWW", 3E-5, -1E-5, 1E-5 },
+    { "ocW",   5E-5, -1E-5, 1E-5 },
+    { "ocB",   9E-4, -1E-3, 1E-3 },
 };
 
 static const FitEFT::FitParamVector FitParams_EFT_SM =
 {
-    { "ocWWW", 0, -1E-3, 1E-3 },
-    { "ocW",   0, -1E-3, 1E-3 },
-    { "ocB",   0, -1E-2, 1E-2 },
+    { "ocWWW", 0, -1E-5, 1E-5 },
+    { "ocW",   0, -1E-5, 1E-5 },
+    { "ocB",   0, -1E-3, 1E-3 },
 };
 
 static const double Luminosity = 10.0;
@@ -189,6 +190,8 @@ static const double Luminosity = 10.0;
 
 int main(void)
 {
+    time_t startTime = time(nullptr);
+
   //FitEFT::FitEFT( "fit/SM_to_self_1E4",  Observables1, CoefNames_EFT_all, Models_1E4[0], FitParams_EFT_SM,  Models_1E4[0], Params_EFT_SM  );
   //FitEFT::FitEFT( "fit/EFT_to_self_1E4", Observables1, CoefNames_EFT_all, Models_1E4[1], FitParams_EFT_all, Models_1E4[1], Params_EFT_all );
 
@@ -199,11 +202,17 @@ int main(void)
 //                    Luminosity, "fit/Cache_1E6_Clipped" );
 
     FitEFT::FitEFT( "fit/EFT_to_SM_1E6", Observables1, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
-                    Luminosity, "fit/Cache_1E6" );
+                    Luminosity, false, "fit/Cache_1E6" );
 
 //    FitEFT::FitEFT( "fit/EFT_to_SM_newbin_1E6", Observables2, CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all,
 //                    Luminosity, "fit/Cache_newbin_1E6" );
 
-    LogMsgInfo( "\nDone." );
+    time_t stopTime = time(nullptr);
+    time_t deltaTime = stopTime - startTime;
+
+    char bufTime[120] = "";
+    strftime( bufTime, sizeof(bufTime), "%M:%S", localtime(&deltaTime) );
+
+    LogMsgInfo( "\nDone. Time %hs", FMT_HS(bufTime) );
     return 0;
 }

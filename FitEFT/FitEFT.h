@@ -47,7 +47,7 @@ void FitEFT( const char * outputFileName,
              const RootUtil::CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
              const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam,
-             double luminosity,
+             double luminosity, bool bCreateScanGraph,
              const char * cacheFileName );
 
 ////////////////////////////////////////////////////////////////////////////////
