@@ -31,14 +31,14 @@ static const ModelCompare::ObservableVector Observables1 =
 
     // optimal observables
 
-    { "cWWW_O1",    "O_{1}(cWWW)",  1000, -6E4,  7E3,   "O_{1}(cWWW) [GeV^{2}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_1_ocWWW"); } },
-    { "cWWW_O2",    "O_{2}(cWWW)",  1000,  0,   2E12,   "O_{2}(cWWW) [GeV^{4}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_1_1_ocWWW"); } },
+    { "cWWW_O1",    "O_{1}(cWWW)",  1000,  -6E4,  1E4,  "O_{1}(cWWW) [GeV^{2}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_1_ocWWW"); } },
+    { "cWWW_O2",    "O_{2}(cWWW)",  1000,   0,   14E11, "O_{2}(cWWW) [GeV^{4}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_1_1_ocWWW"); } },
 
-    { "cW_O1",      "O_{1}(cW)",    1000, -2E6,  2E4,   "O_{1}(cW) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_2_ocW");   } },
-    { "cW_O2",      "O_{2}(cW)",    1000,  0,   6E11,   "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
+    { "cW_O1",      "O_{1}(cW)",    1000, -12E5,  1E5,  "O_{1}(cW) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_2_ocW");   } },
+    { "cW_O2",      "O_{2}(cW)",    1000,   0,   53E10, "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
 
-    { "cB_O1",      "O_{1}(cB)",    1000, -8E2, 5E3,    "O_{1}(cB) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_3_ocB");   } },
-    { "cB_O2",      "O_{2}(cB)",    1000,  0,   2E8,    "O_{2}(cB) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_3_3_ocB");   } },
+    { "cB_O1",      "O_{1}(cB)",    1000,  -1E3,  5E3,  "O_{1}(cB) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_3_ocB");   } },
+    { "cB_O2",      "O_{2}(cB)",    1000,   0,   13E7,  "O_{2}(cB) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_3_3_ocB");   } },
 
     // mean optimal observables
 
@@ -71,6 +71,7 @@ static const ModelCompare::ObservableVector Observables1 =
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// first optimal bin attempt
 static const ModelCompare::ObservableVector Observables2 =
 {
     // phase-space observables
@@ -118,6 +119,7 @@ static const ModelCompare::ObservableVector Observables2 =
     { "cB_O1dSvS",      "O_{1}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{1}(cB)/s",               GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_0_3_ocB",   1); },    2, DefaultTProfileFactory },
 //  { "cB_O2dSvS",      "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s [GeV^{2}]",     GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   1); },    2, DefaultTProfileFactory },
     { "cB_O2dS2vS",     "O_{2}(cB)",    1500, 0, 3000,  "#sqrt{s} [GeV]", "Mean O_{2}(cB)/s^{2}",           GETOBS{ GetObsOptDivSN_vs_sqrtS(s,v,c, "F_3_3_ocB",   2); },    2, DefaultTProfileFactory },
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////
