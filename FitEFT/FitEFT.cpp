@@ -274,6 +274,134 @@ static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult &
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+void MergeZeroBins( TH1D & hist, bool bOnlyInner /*= true*/ )
+{
+    // get sorted list of emtpy bins
+
+    std::list<Int_t> emptyBins;
+
+    const Int_t nBins = hist.GetSize() - 2;
+    for (Int_t bin = 1; bin <= nBins; ++bin)
+    {
+        double binEntries = hist.GetBinContent(bin);
+        if (binEntries == 0.0)
+            emptyBins.push_back(bin);
+    }
+
+    if (emptyBins.empty())
+        return;
+
+    // construct sorted list of zero regions
+
+    typedef std::pair<Int_t,Int_t> BinPair;
+
+    std::list< BinPair > mergeBins;
+    {
+        BinPair * pCurrent = nullptr;
+
+        for (Int_t bin : emptyBins)
+        {
+            if (pCurrent && (bin == pCurrent->second + 1))
+            {
+                // extend current region
+                pCurrent->second = bin;
+                continue;
+            }
+
+            mergeBins.push_back( { bin, bin } );
+            pCurrent = &mergeBins.back();
+        }
+    }
+
+    if (bOnlyInner)
+    {
+        // do not zero end regions if no corresponding under/overflow
+
+        bool bUnderflow = (hist.GetBinContent(0)       != 0.0);
+        bool bOverflow  = (hist.GetBinContent(nBins+1) != 0.0);
+
+        if (!bUnderflow && !mergeBins.empty() && (mergeBins.front().first == 1))
+            mergeBins.pop_front();
+
+        if (!bOverflow && !mergeBins.empty() && (mergeBins.back().second == nBins))
+            mergeBins.pop_back();
+    }
+
+    if (mergeBins.empty())
+        return;
+
+    // extend zero regions one bin to each side, respecting [1,nBins] limit
+    // now regions will have at least on non-zero bin
+    for (BinPair & region : mergeBins)
+    {
+        region.first  = std::max( region.first  - 1, 1     );
+        region.second = std::min( region.second + 1, nBins );
+    }
+
+    // merge adjacent regions sharing the same border bin
+    if (mergeBins.size() > 1)
+    {
+        auto itr1 = mergeBins.begin();
+        auto itr2 = itr1;
+        ++itr2;
+        while (itr2 != mergeBins.end())
+        {
+            if (itr1->second == itr2->first)
+            {
+                itr1->second = itr2->second;
+                itr2 = mergeBins.erase( itr2 );
+                continue;
+            }
+
+            ++itr1;
+            ++itr2;
+        }
+    }
+
+    //LogMsgInfo( "-------- Before merge ---------");
+    //LogMsgHistDump( hist );
+
+    Double_t * pSumw1 = hist.GetArray();
+    Double_t * pSumw2 = hist.GetSumw2()->GetArray();
+
+    if (pSumw2 == nullptr)
+        pSumw2 = pSumw1;
+
+    // now merge the designated bins
+    for (const BinPair & merge : mergeBins)
+    {
+        //LogMsgInfo( "Merging bins %i to %i", FMT_I(merge.first), FMT_I(merge.second) );
+
+        double sum1  = 0;
+        double sum2  = 0;
+        Int_t  count = 0;
+        for (Int_t bin = merge.first; bin <= merge.second; ++bin)
+        {
+            sum1 += pSumw1[bin];
+            sum2 += pSumw2[bin];
+            ++count;
+        }
+
+        double avg1 = sum1 / count;
+        double avg2 = sum2 / count;
+
+        for (Int_t bin = merge.first; bin <= merge.second; ++bin)
+        {
+            pSumw1[bin] = avg1;
+            pSumw2[bin] = avg2;
+        }
+    }
+
+    hist.ResetStats();
+
+    //LogMsgInfo( "-------- After merge ---------");
+    //LogMsgHistDump( hist );
+
+    //LogMsgInfo(".");
+    //LogMsgHistBinCounts(hist);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 class ReweightPDFFunc
 {
 public:
@@ -344,6 +472,9 @@ public:
             m_upLastSourceReweight.reset(
                 ReweightEFT::ReweightHist( m_source, m_sourceCoefs, m_sourceEval, targetEval,
                                            "RWFitHist", "RWFitHist" ) );
+
+            if (!m_bProfile)
+                MergeZeroBins( *m_upLastSourceReweight );
 
             double integral         = m_upLastSourceReweight->Integral();
             double integralExt      = ExtendedIntegral( *m_upLastSourceReweight );

@@ -28,6 +28,8 @@ void LoadTupleData( const ModelCompare::ObservableVector & observables, const Mo
                     std::vector<RootUtil::TupleVector> & allData,
                     const char * cacheFileName );
 
+void MergeZeroBins( TH1D & hist, bool bOnlyInner = true );
+
 ////////////////////////////////////////////////////////////////////////////////
 
 struct FitParam
