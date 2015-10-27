@@ -44,14 +44,6 @@ namespace FitEFT
 
 struct FitResult
 {
-    enum class Kind
-    {
-        Undefined,
-        Binned,
-        Binned_ShapeOnly,
-        Unbinned
-    };
-
     struct Param
     {
         const char *    name            = nullptr;
@@ -64,7 +56,7 @@ struct FitResult
 
     typedef std::vector<Param> ParamVector;
 
-    Kind            kind        = Kind::Undefined;
+    FitKind         kind       = FitKind::Undefined;
     int             status      = 0;
     double          chi2        = 0;
     int             ndf         = 0;
@@ -74,39 +66,39 @@ struct FitResult
 
     FitResult() = default;
 
-    explicit FitResult( Kind kind, int status = 0 )
+    explicit FitResult( FitKind kind, int status = 0 )
         : kind(kind), status(status)
     {
     }
 
-    static const char * Name( Kind kind )
+    static const char * Name( FitKind kind )
     {
         switch (kind)
         {
             default :
-            case Kind::Undefined        : return "undefined";   break;
-            case Kind::Binned           : return "binned";      break;
-            case Kind::Binned_ShapeOnly : return "binshape";    break;
-            case Kind::Unbinned         : return "unbinned";    break;
+            case FitKind::Undefined        : return "undefined";   break;
+            case FitKind::Binned           : return "binned";      break;
+            case FitKind::Binned_ShapeOnly : return "binshape";    break;
+            case FitKind::Unbinned         : return "unbinned";    break;
         }
     }
 
-    static const char * Title( Kind kind )
+    static const char * Title( FitKind kind )
     {
         switch (kind)
         {
             default :
-            case Kind::Undefined        : return "undefined";               break;
-            case Kind::Binned           : return "binned";                  break;
-            case Kind::Binned_ShapeOnly : return "binned (shape-only)";     break;
-            case Kind::Unbinned         : return "unbinned";                break;
+            case FitKind::Undefined        : return "undefined";               break;
+            case FitKind::Binned           : return "binned";                  break;
+            case FitKind::Binned_ShapeOnly : return "binned (shape-only)";     break;
+            case FitKind::Unbinned         : return "unbinned";                break;
         }
     }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef std::tuple<const char *, FitResult::Kind, int>  FitIdent;           // obsName, kind, fitIndex
+typedef std::tuple<const char *, FitKind, int>  FitIdent;           // obsName, kind, fitIndex
 typedef std::map< FitIdent, FitResult >                 FitResultMap;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -193,7 +185,7 @@ static TGraph * GraphFromProfile( const TProfile & profile, bool bWithErrors = t
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static FitResult ConstructFitResult( FitResult::Kind fitKind, const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
+static FitResult ConstructFitResult( FitKind fitKind, const TFitResult & fitStatus, const ModelCompare::Observable & obs, const FitParamVector & fitParam, int fitIndex,
                                      bool bCreateScanGraph, const char * objectiveTitle )
 {
     FitResult result(fitKind);
@@ -566,7 +558,7 @@ private:
         if (m_bThrowOnReject)
             ThrowError( "RWPDFFunc rejecting x=%f", FMT_F(x) );
 
-        LogMsgInfo( "RWPDFFunc rejecting x=%f", FMT_F(x) );
+        //LogMsgInfo( "RWPDFFunc rejecting x=%f", FMT_F(x) );
         ++m_rejectCount;
         TF1::RejectPoint();
     }
@@ -576,7 +568,7 @@ private:
         if (m_bThrowOnReject)
             ThrowError( "RWPDFFunc rejecting bin %i", FMT_I(bin) );
 
-        LogMsgInfo( "RWPDFFunc rejecting bin %i", FMT_I(bin) );
+        //LogMsgInfo( "RWPDFFunc rejecting bin %i", FMT_I(bin) );
         ++m_rejectCount;
         TF1::RejectPoint();
     }
@@ -611,7 +603,7 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
                             bool bShapeOnly         = false,    // if true normalize event count of the model data to same as the target data
                             bool bCreateScanGraph   = false )   // create scan graphs around minimization point
 {
-    const FitResult::Kind fitKind = bShapeOnly ? FitResult::Kind::Binned_ShapeOnly : FitResult::Kind::Binned;
+    const FitKind fitKind = bShapeOnly ? FitKind::Binned_ShapeOnly : FitKind::Binned;
 
     const Double_t  xMin  = target.GetXaxis()->GetXmin();
     const Double_t  xMax  = target.GetXaxis()->GetXmax();
@@ -840,7 +832,7 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
         return FitResult();
     */
 
-    const FitResult::Kind fitKind = FitResult::Kind::Unbinned;
+    const FitKind fitKind = FitKind::Unbinned;
 
     const Double_t  xMin  = source.GetXaxis()->GetXmin();
     const Double_t  xMax  = source.GetXaxis()->GetXmax();
@@ -925,7 +917,7 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
         }
         else
         {
-            //fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
+            fitFunc.SetParLimits( i, fitParam[i].minValue, fitParam[i].maxValue );
             fitFunc.SetParError(  i, (fitParam[i].maxValue - fitParam[i].minValue) / 100 ); // set initial step (helps fit converge)
         }
     }
@@ -965,6 +957,8 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
             //upTestData->Add( value );
         }
     }
+
+    LogMsgInfo( "\nReject Count: %u\n", FMT_U(modelFunc.RejectCount()) );
 
     // enable throw on reject to check that our PDF always has a value for every unbinned data point
     // unsupported data points should have been removed above as the unbinned data was constructed
@@ -1012,7 +1006,7 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
     }
 
     //
-    // first fit with no limits
+    // first fit with limits
     //
 
     // clear last fitter to ensure no previous fit results will affect this fit
@@ -1300,7 +1294,7 @@ static bool WriteFitResult( FILE * fpLog, const FitResult & result, TFile * pFig
 
 ////////////////////////////////////////////////////////////////////////////////
 static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector & observables, const FitParamVector & fitParam,
-                             const std::vector<FitResult::Kind> & fitKinds,
+                             const std::vector<FitKind> & fitKinds,
                              const FitResultMap & results )
 {
     WriteLog( fpLog, "\nSUMMARY" );
@@ -1316,7 +1310,7 @@ static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector 
         {
             const ModelCompare::Observable & obs = observables[obsIndex];
 
-            for (FitResult::Kind fitKind : fitKinds)
+            for (FitKind fitKind : fitKinds)
             {
                 // find fit of one parameter
 
@@ -1390,10 +1384,10 @@ static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector 
                 char fitID;
                 switch (fitKind)
                 {
-                    case FitResult::Kind::Unbinned          : fitID = 'U'; break;
-                    case FitResult::Kind::Binned            : fitID = 'B'; break;
-                    case FitResult::Kind::Binned_ShapeOnly  : fitID = 'S'; break;
-                    default                                 : fitID = '?'; break;
+                    case FitKind::Unbinned          : fitID = 'U'; break;
+                    case FitKind::Binned            : fitID = 'B'; break;
+                    case FitKind::Binned_ShapeOnly  : fitID = 'S'; break;
+                    default                         : fitID = '?'; break;
                 }
 
                 WriteLog( fpLog, "%C %12hs: %48s || %48s",
@@ -1416,19 +1410,19 @@ static bool DoFit(  FILE * fpLog,
                     const TH1D &                        source,
                     const ConstTH1DVector               srcCoefs,
                     const std::vector<double>  &        sourceEval,
-                    FitResult::Kind                     fitKind,
+                    FitKind                             fitKind,
                     int                                 fitIndex,
                     bool                                bCreateScanGraph,
                     FitResult &                         fitResult )
 {
     switch (fitKind)
     {
-        case FitResult::Kind::Binned           :
-        case FitResult::Kind::Binned_ShapeOnly :
+        case FitKind::Binned           :
+        case FitKind::Binned_ShapeOnly :
             if (!pTargetHist) return false;
             break;
 
-        case FitResult::Kind::Unbinned :
+        case FitKind::Unbinned :
             if (!pTargetTree) return false;
             break;
 
@@ -1444,10 +1438,10 @@ static bool DoFit(  FILE * fpLog,
 
     switch (fitKind)
     {
-        case FitResult::Kind::Binned :
-        case FitResult::Kind::Binned_ShapeOnly :
+        case FitKind::Binned :
+        case FitKind::Binned_ShapeOnly :
         {
-            bool bShapeOnly = fitKind == FitResult::Kind::Binned_ShapeOnly;
+            bool bShapeOnly = fitKind == FitKind::Binned_ShapeOnly;
 
             fitResult = FitEFTObs( obs, coefNames, *pTargetHist, fitParam,
                                    source, srcCoefs, sourceEval,
@@ -1460,7 +1454,7 @@ static bool DoFit(  FILE * fpLog,
             break;
         }
 
-        case FitResult::Kind::Unbinned :
+        case FitKind::Unbinned :
         {
             if (source.InheritsFrom(TProfile::Class()))
                 return false;
@@ -1487,7 +1481,10 @@ void FitEFT( const char * outputFileName,
              const CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
              const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam,
-             double luminosity, bool bCreateScanGraph,
+             double luminosity,
+             const std::vector<FitKind> & fitKinds,
+             bool bFitAll,
+             bool bCreateScanGraph,
              const char * cacheFileName )
 {
     // disable automatic histogram addition to current directory
@@ -1591,10 +1588,9 @@ void FitEFT( const char * outputFileName,
     {
         for (int fitIndex = 0; fitIndex < fitParam.size(); ++fitIndex)
             fitIndexes[fitIndex] = fitIndex;
-        fitIndexes.push_back(-1);
+        if (bFitAll)
+            fitIndexes.push_back(-1);
     }
-
-    std::vector<FitResult::Kind> fitKinds = { FitResult::Kind::Binned, FitResult::Kind::Binned_ShapeOnly, FitResult::Kind::Unbinned };
 
     FitResultMap results;
 
@@ -1619,7 +1615,7 @@ void FitEFT( const char * outputFileName,
             pTargetHist = goodBad.good.get();
         }
 
-        for ( FitResult::Kind fitKind : fitKinds)
+        for ( FitKind fitKind : fitKinds)
         {
             for (int fitIndex : fitIndexes)
             {

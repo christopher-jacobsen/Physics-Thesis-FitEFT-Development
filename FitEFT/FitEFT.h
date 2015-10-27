@@ -44,12 +44,23 @@ typedef std::vector<FitParam> FitParamVector;
 
 ////////////////////////////////////////////////////////////////////////////////
 
+enum class FitKind
+{
+    Undefined,
+    Binned,
+    Binned_ShapeOnly,
+    Unbinned
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
 void FitEFT( const char * outputFileName,
              const ModelCompare::ObservableVector & observables,
              const RootUtil::CStringVector & coefNames,
              const ModelCompare::ModelFile & targetFile, const FitParamVector & fitParam,
              const ModelCompare::ModelFile & sourceFile, const ReweightEFT::ParamVector & sourceParam,
-             double luminosity, bool bCreateScanGraph,
+             double luminosity,
+             const std::vector<FitKind> & fitKinds, bool bFitAll, bool bCreateScanGraph,
              const char * cacheFileName );
 
 ////////////////////////////////////////////////////////////////////////////////
