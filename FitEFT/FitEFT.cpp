@@ -465,8 +465,8 @@ public:
                 ReweightEFT::ReweightHist( m_source, m_sourceCoefs, m_sourceEval, targetEval,
                                            "RWFitHist", "RWFitHist" ) );
 
-            if (!m_bProfile)
-                MergeZeroBins( *m_upLastSourceReweight );
+            //if (!m_bProfile)
+            //    MergeZeroBins( *m_upLastSourceReweight );
 
             double integral         = m_upLastSourceReweight->Integral();
             double integralExt      = ExtendedIntegral( *m_upLastSourceReweight );
