@@ -24,11 +24,11 @@ static const ModelCompare::ObservableVector Observables1 =
 {
     // phase-space observables
 
-    { "PTZ", "P_{T}(Z)",  150,     0,  750, "P_{T}(Z) [GeV/c]", "Events per 5 GeV/c",       GETOBS{ GetObs(s,v,c, GetObsPT,   24);     } },
-    { "MWZ", "M(WZ)",     150,     0, 3000, "M(WZ) [GeV/c^2]",  "Events per 20 GeV/c^2",    GETOBS{ GetObs(s,v,c, GetObsMass, 24, 23); } },
-    { "RAZ", "Y(Z)",      100,    -5,    5, "Y(Z)",             "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsRap,  24);     } },
-//  { "ETZ", "#eta(Z)",   100,   -10,   10, "#eta(Z)",          "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsEta,  24);     } },
-//  { "PHZ", "#phi(Z)",   100, -M_PI, M_PI, "#phi(Z)",          "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsPhi,  24);     } },
+    { "PTZ", "P_{T}(Z)",  150,     0,  750, "P_{T}(Z) [GeV/c]",     "Events per 5 GeV/c",       GETOBS{ GetObs(s,v,c, GetObsPT,   24);     } },
+    { "MWZ", "M(WZ)",     150,     0, 3000, "M(WZ) [GeV/c^{2}]",    "Events per 20 GeV/c^{2}",  GETOBS{ GetObs(s,v,c, GetObsMass, 24, 23); } },
+    { "RAZ", "Y(Z)",      100,    -5,    5, "Y(Z)",                 "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsRap,  24);     } },
+//  { "ETZ", "#eta(Z)",   100,   -10,   10, "#eta(Z)",              "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsEta,  24);     } },
+//  { "PHZ", "#phi(Z)",   100, -M_PI, M_PI, "#phi(Z)",              "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsPhi,  24);     } },
 
     // optimal observables
 
@@ -79,11 +79,11 @@ static const ModelCompare::ObservableVector Observables2 =
 
     // phase-space observables
 
-    { "PTZ",        "P_{T}(Z)",      750,      0,    750,   "P_{T}(Z) [GeV/c]", "Events per 5 GeV/c",       GETOBS{ GetObs(s,v,c, GetObsPT,   24);     } },
-    { "MWZ",        "M(WZ)",        1500,      0,   3000,   "M(WZ) [GeV/c^2]",  "Events per 20 GeV/c^2",    GETOBS{ GetObs(s,v,c, GetObsMass, 24, 23); } },
-    { "RAZ",        "Y(Z)",          200,     -5,      5,   "Y(Z)",             "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsRap,  24);     } },
-//  { "ETZ",        "#eta(Z)",       100,    -10,     10,   "#eta(Z)",          "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsEta,  24);     } },
-//  { "PHZ",        "#phi(Z)",       100,  -M_PI,   M_PI,   "#phi(Z)",          "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsPhi,  24);     } },
+    { "PTZ",        "P_{T}(Z)",      750,      0,    750,   "P_{T}(Z) [GeV/c]",     "Events per GeV/c",         GETOBS{ GetObs(s,v,c, GetObsPT,   24);     } },
+    { "MWZ",        "M(WZ)",        1500,      0,   3000,   "M(WZ) [GeV/c^{2}]",    "Events per 2 GeV/c^{2}",   GETOBS{ GetObs(s,v,c, GetObsMass, 24, 23); } },
+    { "RAZ",        "Y(Z)",          200,     -5,      5,   "Y(Z)",                 "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsRap,  24);     } },
+//  { "ETZ",        "#eta(Z)",       100,    -10,     10,   "#eta(Z)",              "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsEta,  24);     } },
+//  { "PHZ",        "#phi(Z)",       100,  -M_PI,   M_PI,   "#phi(Z)",              "Events per bin",           GETOBS{ GetObs(s,v,c, GetObsPhi,  24);     } },
 
     // optimal observables
 
@@ -201,9 +201,9 @@ static const ReweightEFT::ParamVector Params_EFT_SM =
 
 static const FitEFT::FitParamVector FitParams_EFT_all =
 {
-    { "ocWWW", 3E-5, -1E-5, 1E-5 },
-    { "ocW",   5E-5, -1E-5, 1E-5 },
-    { "ocB",   9E-4, -1E-3, 1E-3 },
+    { "ocWWW", 3E-5, -1E-4, 1E-4 },
+    { "ocW",   5E-5, -1E-4, 1E-4 },
+    { "ocB",   9E-4, -1E-2, 1E-2 },
 };
 
 static const FitEFT::FitParamVector FitParams_EFT_SM =
@@ -239,7 +239,7 @@ int main(void)
 
     FitEFT::FitEFT( "fit/EFT_to_SM_unbinned_1E6", ObservablesUnbinned,
                     CoefNames_EFT_all, Models_1E6[0], FitParams_EFT_SM, Models_1E6[1], Params_EFT_all, Luminosity,
-                    { FitKind::Unbinned }, false, false, "fit/Cache_unbinned_1E6" );
+                    { FitKind::Unbinned }, true, false, "fit/Cache_unbinned_1E6" );
 
     time_t stopTime = time(nullptr);
     time_t deltaTime = stopTime - startTime;
