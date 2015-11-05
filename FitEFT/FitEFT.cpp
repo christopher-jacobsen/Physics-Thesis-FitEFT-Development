@@ -711,7 +711,11 @@ static FitResult FitEFTObs( const ModelCompare::Observable & obs, const CStringV
     // error definition: the objective function delta that determines parameter error results
     // default is 1 sigma - likelihood: 0.5  chi^2: 1.0
     // both have quadratic dependence, so 2 sigma is 4 times the 1 sigma error definition
-    ROOT::Math::MinimizerOptions::SetDefaultErrorDef( bLogLike ? 2 : 4 );
+
+    double errorDef_like = 1.96 * 1.96 * 0.5;   // 95% for likelihood
+    double errorDef_chi2 = 1.96 * 1.96;         // 95% for chi2
+
+    ROOT::Math::MinimizerOptions::SetDefaultErrorDef( bLogLike ? errorDef_like : errorDef_chi2 );
 
     //ROOT::Math::MinimizerOptions::SetDefaultTolerance( 0.1 );
 
@@ -987,9 +991,10 @@ static FitResult UnBinFitEFTObs( const ModelCompare::Observable & obs, const CSt
 
     ROOT::Math::MinimizerOptions minOption;
     {
-        // for likelihood: 1 sigma = 0.5*1^2 = 0.5, 2 sigma = 0.5*2^2 = 2
-        minOption.SetErrorDef( 2.0 );
-        //minOption.SetErrorDef( 2.0 / targetScale );
+        // for likelihood: 1 sigma = 0.5*1^2 = 0.5, 2 sigma = 0.5*2^2 = 2, 95% = 0.5*(1.96)^2
+        double errorDef = 0.5 * 1.96 * 1.96;
+        minOption.SetErrorDef( errorDef );
+        //minOption.SetErrorDef( errorDef / targetScale );
 
         // converge when EDM < 0.001 * Tolerance
         // default: Tolerance = 0.1
