@@ -1297,6 +1297,23 @@ static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector 
                              const std::vector<FitKind> & fitKinds,
                              const FitResultMap & results )
 {
+    auto GetValueString = []( double value, double error ) -> std::string
+    {
+        char buffer[100];
+
+        sprintf( buffer, "%+.0E", error );
+        int errExp = atoi( buffer + 3 );
+
+        sprintf( buffer, "%+.0E", value );
+        int valExp = atoi( buffer + 3 );
+
+        int expDiff = std::max( valExp - errExp, 0);
+        int valSig  = 2 + expDiff;
+
+        sprintf( buffer, "%.*g", FMT_I(valSig), FMT_F(value) );
+        return buffer;
+    };
+
     WriteLog( fpLog, "\nSUMMARY" );
 
     // Write summary
@@ -1348,7 +1365,7 @@ static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector 
                 if (!pFitOne && !pFitAll)
                     continue;
 
-                auto GetResult = [](const FitResult::Param * pPar, const FitResult * pRes, double scale = 1E6) -> std::string
+                auto GetResult = [GetValueString](const FitResult::Param * pPar, const FitResult * pRes, double scale = 1E6) -> std::string
                 {
                     auto GetMinos = [](const FitResult::Param & par, double scale) -> std::string
                     {
@@ -1372,9 +1389,10 @@ static void WriteFitSummary( FILE * fpLog, const ModelCompare::ObservableVector 
 
                     std::string sMinos  = GetMinos( *pPar, scale );
                     std::string sChi2   = (!pRes || pRes->chi2_ndf < 0.0) ? "" : StringFormat( "%6.2g", FMT_F(pRes->chi2_ndf) );
+                    std::string sValue  = GetValueString( pPar->value*scale, pPar->error*scale );
 
-                    return StringFormat( "%8.2g | %8.2g %19hs | %6hs",
-                                         FMT_F(pPar->value*scale), FMT_F(pPar->error*scale),
+                    return StringFormat( "%8s | %8.2g %19hs | %6hs",
+                                         FMT_HS(sValue.c_str()), FMT_F(pPar->error*scale),
                                          FMT_HS(sMinos.c_str()), FMT_HS(sChi2.c_str()) );
                 };
 
