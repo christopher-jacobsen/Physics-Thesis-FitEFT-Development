@@ -91,7 +91,7 @@ static const ModelCompare::ObservableVector Observables2 =
     { "cWWW_O2",    "O_{2}(cWWW)",    10000,   0,   14E11,  "O_{2}(cWWW) [GeV^{4}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_1_1_ocWWW"); } },
 
     { "cW_O1",      "O_{1}(cW)",      10000, -12E5,  1E5,   "O_{1}(cW) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_2_ocW");   } },
-    { "cW_O2",      "O_{2}(cW)",      10000,   0,   53E10,  "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
+    { "cW_O2",      "O_{2}(cW)",      10000,   0,   54E10,  "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
 
     { "cB_O1",      "O_{1}(cB)",       1000,  -1E3,  5E3,   "O_{1}(cB) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_3_ocB");   } },
     { "cB_O2",      "O_{2}(cB)",      10000,   0,   13E7,   "O_{2}(cB) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_3_3_ocB");   } },
@@ -142,7 +142,7 @@ static const ModelCompare::ObservableVector ObservablesUnbinned =
     { "cWWW_O2",    "O_{2}(cWWW)",  100000,   0,   14E11,       "O_{2}(cWWW) [GeV^{4}]", "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_1_1_ocWWW"); } },
 
     { "cW_O1",      "O_{1}(cW)",    100000, -12E5,  1E5,        "O_{1}(cW) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_2_ocW");   } },
-    { "cW_O2",      "O_{2}(cW)",    100000,   0,   53E10,       "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
+    { "cW_O2",      "O_{2}(cW)",    100000,   0,   54E10,       "O_{2}(cW) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_2_2_ocW");   } },
 
     { "cB_O1",      "O_{1}(cB)",    100000,  -1E3,  5E3,        "O_{1}(cB) [GeV^{2}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_0_3_ocB");   } },
     { "cB_O2",      "O_{2}(cB)",    100000,   0,   13E7,        "O_{2}(cB) [GeV^{4}]",   "Events per bin",  GETOBS{ GetObs(s,v,c, GetObsOpt, "F_3_3_ocB");   } },
@@ -159,14 +159,16 @@ static const ModelCompare::ModelFileVector Models_1E4 =
 
 static const ModelCompare::ModelFileVector Models_1E6 =
 {
-    { "weight/SM_220_weight_1E6.hepmc2g.gz",    "SM_220",   "SM",   18.5537, 0.0156025, 1000000 },
-    { "weight/EFT_all_weight_1E6.hepmc2g.gz",   "EFT_all",  "EFT",  42.8051, 0.0379205, 1000000 },
+//  { "weight/SM_220_weight_1E6.hepmc2g.gz",        "SM_220",   "SM",       18.5537, 0.0156025, 1000000 },
+    { "weight/SM_UFO_220_weight_1E6.hepmc2g.gz",    "SM_UFO",   "SM-EFT",   18.5476, 0.0155949, 1000000 },
+    { "weight/EFT_all_weight_1E6.hepmc2g.gz",       "EFT_all",  "EFT",      42.8051, 0.0379205, 1000000 },
 };
 
 static const ModelCompare::ModelFileVector Models_1E6_Clipped =
 {
-    { "weight/SM_220_weight_1E6.hepmc2g.gz",    "SM_220",   "SM",   18.5537, 0.0156025, 185537, 185537 },
-    { "weight/EFT_all_weight_1E6.hepmc2g.gz",   "EFT_all",  "EFT",  42.8051, 0.0379205, 428051, 428051 },
+//  { "weight/SM_220_weight_1E6.hepmc2g.gz",        "SM_220",   "SM",       18.5537, 0.0156025, 185537,  185537  },
+    { "weight/SM_UFO_220_weight_1E6.hepmc2g.gz",    "SM_UFO",   "SM-EFT",   18.5476, 0.0155949, 1000000, 1000000 },
+    { "weight/EFT_all_weight_1E6.hepmc2g.gz",       "EFT_all",  "EFT",      42.8051, 0.0379205, 428051,  428051  },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
